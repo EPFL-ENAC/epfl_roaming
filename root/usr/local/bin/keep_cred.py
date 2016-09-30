@@ -64,6 +64,11 @@ def save_credentials(username = USERNAME, password = PASSWORD):
 
     try:
         with open(CRED_FILENAME, "wb") as f:
+            pass
+        pw = pwd.getpwnam(USERNAME)
+        os.chown(CRED_FILENAME, pw.pw_uid, pw.pw_gid)
+        os.chmod(CRED_FILENAME, 0600)
+        with open(CRED_FILENAME, "wb") as f:
             enc_password = encode(username, password)
             pickle.dump(enc_password, f)
     except IOError:
@@ -71,9 +76,5 @@ def save_credentials(username = USERNAME, password = PASSWORD):
         sys.exit(1)
 
 save_credentials(USERNAME, PASSWORD)
-
-pw = pwd.getpwnam(USERNAME)
-os.chown(CRED_FILENAME, pw.pw_uid, pw.pw_gid)
-os.chmod(CRED_FILENAME, 0600)
 
 sys.exit(0)

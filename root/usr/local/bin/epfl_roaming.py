@@ -81,7 +81,7 @@ RM_SLEEP = 1
 UMOUNT_MAX_ATTEMPT = 3
 UMOUNT_SLEEP = 1
 
-UNLINK_CRED_FILE = False
+UNLINK_CRED_FILE = True
 
 SEMAPHORE_LOCK_FILE = "/tmp/epfl_roaming_global_lock"
 
@@ -793,9 +793,8 @@ def filers_mount(config, user):
     """
     IO.write("Proceeding mount!")
     success = True
-    password = get_credentials(user)
-    if password != None:
-        os.environ['PASSWD'] = password # For CIFS mounts
+    if PASSWORD != None:
+        os.environ['PASSWD'] = PASSWORD # For CIFS mounts
     for mount_point, mount_instruction in config["mounts"].items():
         if not os.path.exists(mount_point):
             #~ os.makedirs(mount_point)
@@ -818,7 +817,7 @@ def filers_mount(config, user):
         )
         if not ismount(mount_point):
             success = False
-    if password != None:
+    if PASSWORD != None:
         del os.environ['PASSWD']
     return success
 
@@ -1086,7 +1085,11 @@ if __name__ == '__main__':
     else:
         logfile_name = LOG_SESSION.format(username=user.username)
 
+    EPFL_ROAMING_DONE_FILE = os.path.join("/tmp/epfl_roaming_{}_done".format(user.username))
+
     with IO(logfile_name):
+        PASSWORD = get_credentials(user)
+
         # IO.write(pprint.pformat(user))
         #~ IO.write("ENV :")
         #~ IO.write(pprint.pformat(os.environ))
@@ -1122,14 +1125,18 @@ if __name__ == '__main__':
             if options.context == "pam":
                 if user.conn_type == "open_session":
                     with lockfile.FileLock(SEMAPHORE_LOCK_FILE):
-                        if count_sessions(user, +1) == 1:
+                        count_sessions(user, +1)
+                        if PASSWORD is not None and not os.path.exists(EPFL_ROAMING_DONE_FILE):
                             proceed_roaming_open(config, user)
+                            with open(EPFL_ROAMING_DONE_FILE, "w"):
+                                pass
                 elif user.conn_type == "close_session":
                     time.sleep(0.5) # Give on_halt the chance to be the 1st!
                     with lockfile.FileLock(SEMAPHORE_LOCK_FILE):
                         if count_sessions(user, -1) == 0:
                             with PreventInterrupt():
                                 proceed_roaming_close(options, config, user)
+                            os.unlink(EPFL_ROAMING_DONE_FILE)
 
             elif options.context == "session":
                 gconf_load(config, user)
