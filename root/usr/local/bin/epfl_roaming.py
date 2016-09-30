@@ -130,6 +130,11 @@ class IO(object):
 
     def __enter__(self):
         IO.__open__(self.filename)
+        try:
+            for msg, eol in IO.previous_writes:
+                IO.write(msg, eol)
+        except AttributeError:
+            pass
 
     def __exit__(self, typ, val, tb):
         IO.__close__()
@@ -137,7 +142,13 @@ class IO(object):
     @classmethod
     def write(cls, msg, eol="\n"):
         pid = os.getpid()
-        cls.f.write("\n".join(["(%s) %s" % (pid, s) for s in msg.split("\n")]) + eol)
+        try:
+            cls.f.write("\n".join(["(%s) %s" % (pid, s) for s in msg.split("\n")]) + eol)
+        except AttributeError:
+            try:
+                cls.previous_writes.append((msg, eol))
+            except AttributeError:
+                cls.previous_writes = [(msg, eol),]
 
     @classmethod
     def __open__(cls, filename):
@@ -570,8 +581,8 @@ def get_mount_point(mount_instruction):
         IO.write("Aborting")
         sys.exit(1)
 
-def get_credentials(user):
-    cred_filename = "/tmp/%s_epfl_cred" % user.username
+def get_credentials(username):
+    cred_filename = "/tmp/%s_epfl_cred" % username
 
     # Decode credential
     def decode(username, enc_password):
@@ -584,12 +595,12 @@ def get_credentials(user):
     try:
         with open(cred_filename, "rb") as f:
             enc_password = pickle.load(f)
-    except IOError:
-        IO.write("Error: Could not load file %s, skipping." % cred_filename)
+    except Exception:
+        IO.write("Warning: could not load file %s, skipping." % cred_filename)
         return None
     if UNLINK_CRED_FILE:
         os.unlink(cred_filename)
-    return decode(user.username, enc_password)
+    return decode(username, enc_password)
 
 def ismount(path):
     """
@@ -1069,6 +1080,10 @@ def signal_handler(signum, frame):
 
 ### MAIN
 if __name__ == '__main__':
+    username = os.environ.get("PAM_USER", None)
+    if username is not None:
+        PASSWORD = get_credentials(username)
+
     # Manage the kill -TERM  ... unfortunately not kill -9
     signal.signal(signal.SIGTERM, signal_handler)
     #~ signal.signal(signal.SIGKILL, signal_handler)
@@ -1088,8 +1103,6 @@ if __name__ == '__main__':
     EPFL_ROAMING_DONE_FILE = os.path.join("/tmp/epfl_roaming_{}_done".format(user.username))
 
     with IO(logfile_name):
-        PASSWORD = get_credentials(user)
-
         # IO.write(pprint.pformat(user))
         #~ IO.write("ENV :")
         #~ IO.write(pprint.pformat(os.environ))
