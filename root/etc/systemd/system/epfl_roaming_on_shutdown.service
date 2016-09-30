@@ -1,0 +1,13 @@
+[Unit]
+Description=Run epfl_roaming on shutdown to make sure everything is repatriated
+
+# After= ... makes sure network is still available during ExecStop execution
+After=network.target
+
+[Service]
+ExecStart=/bin/true
+ExecStop=/usr/local/bin/epfl_roaming.py --on_halt
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

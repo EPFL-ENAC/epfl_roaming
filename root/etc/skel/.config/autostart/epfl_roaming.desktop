@@ -1,0 +1,12 @@
+
+[Desktop Entry]
+Type=Application
+Exec=/usr/local/bin/epfl_roaming.py --session
+Terminal=false
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+Name[en_US]=epfl_roaming
+Name=epfl_roaming
+Comment[en_US]=EPFL Roaming - GConf, DConf
+Comment=EPFL Roaming - GConf, DConf
