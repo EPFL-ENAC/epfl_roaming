@@ -15,6 +15,7 @@
 import os
 import sys
 import pwd
+import errno
 import pickle
 import ldap
 import re
@@ -63,12 +64,18 @@ def save_credentials(username = USERNAME, password = PASSWORD):
         return enc_password
 
     try:
-        with open(CRED_FILENAME, "wb") as f:
-            pass
+        for i in range(2):
+            try:
+                fd = os.open(CRED_FILENAME, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0600)
+                break
+            except OSError, e:
+                if i == 0 and e.errno == errno.EEXIST:
+                    os.unlink(CRED_FILENAME)
+                else:
+                    raise
         pw = pwd.getpwnam(USERNAME)
         os.chown(CRED_FILENAME, pw.pw_uid, pw.pw_gid)
-        os.chmod(CRED_FILENAME, 0600)
-        with open(CRED_FILENAME, "wb") as f:
+        with os.fdopen(fd, "wb") as f:
             enc_password = encode(username, password)
             pickle.dump(enc_password, f)
     except IOError:

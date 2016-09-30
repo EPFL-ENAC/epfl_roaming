@@ -594,12 +594,12 @@ def get_credentials(username):
 
     try:
         with open(cred_filename, "rb") as f:
+            if UNLINK_CRED_FILE:
+                os.unlink(cred_filename)
             enc_password = pickle.load(f)
     except Exception:
         IO.write("Warning: could not load file %s, skipping." % cred_filename)
         return None
-    if UNLINK_CRED_FILE:
-        os.unlink(cred_filename)
     return decode(username, enc_password)
 
 def ismount(path):
