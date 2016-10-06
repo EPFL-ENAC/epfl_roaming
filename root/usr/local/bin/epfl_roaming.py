@@ -326,7 +326,8 @@ def read_user(options, on_halt_username=None):
     my_ldap = Ldap()
     try :
         ldap_res = my_ldap.search_s(
-            l_filter="uidNumber=%s" % pw.pw_uid,
+            # l_filter="uidNumber=%s" % pw.pw_uid,
+            l_filter="uid=%s" % user.username,
             l_attrs=["uniqueIdentifier"]
         )
         unique_identifier = ldap_res[0][1]["uniqueIdentifier"][0]
@@ -371,7 +372,7 @@ def check_options(options, user):
     #~ if options.context == "pam" and user.conn_service == "lightdm":
         #~ IO.write("Not doing things for lightdm sessions trigged by PAM")
         #~ sys.exit(0)
-    if options.context == "pam" and user.conn_service not in ("lightdm", "sshd", "login"):
+    if options.context == "pam" and user.conn_service not in ("lightdm", "sshd", "login", "common-session"):
         IO.write("Not doing anything for PAM_SERVICE '%s'" % user.conn_service)
         sys.exit(0)
     if options.context in ("pam", "on_halt", "torque_prologue", "torque_epilogue") and os.geteuid() != 0:
@@ -840,7 +841,7 @@ def filers_umount(config, user):
     """
     IO.write("Proceeding umount!")
     success = True
-    for mount_point in config["mounts"].keys() + [os.path.join(user.home_dir, ".gvfs"),]:
+    for mount_point in config["mounts"].keys() + [os.path.join(user.home_dir, ".gvfs"), os.path.join(user.home_dir, "freerds_client"),]:
         if not ismount(mount_point):
             IO.write("%s not mounted. Skip." % mount_point)
             continue
