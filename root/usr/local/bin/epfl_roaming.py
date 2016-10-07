@@ -818,7 +818,7 @@ def filers_mount(config, user):
             )
             # chown parents also
             parent_dir = os.path.dirname(mount_point)
-            while parent_dir.startswith("/home/%s" % user.username):
+            while parent_dir.startswith(user.home_dir):
                 run_cmd(
                     cmd=["chown", "%s:" % user.username, parent_dir]
                 )
@@ -870,6 +870,65 @@ def make_homedir(user):
 
 def proceed_roaming_open(config, user):
     IO.write("Proceeding roaming 'open'!")
+    paths_to_chown = []
+
+    def prepare_link(target, link_name, user):
+        if re.search(r'/$', target):
+            target_is_dir = True
+        else:
+            target_is_dir = False
+        if re.match(r'\+', target):
+            force_link = True
+            target = target[1:]
+        else:
+            force_link = False
+
+        target = os.path.normpath(os.path.join(user.home_dir, target))
+        link_name = os.path.normpath(os.path.join(user.home_dir, link_name))
+        target_parent = os.path.normpath(target + "/..")
+        link_name_parent = os.path.normpath(link_name + "/..")
+
+        already_done = (os.path.islink(link_name) and
+                        os.readlink(link_name) == target)
+        if already_done:
+            return
+
+        if force_link:
+            # create target if non existent
+            if target_is_dir:
+                if not os.path.exists(target):
+                    os.makedirs(target)
+            else:
+                if not os.path.exists(target_parent):
+                    os.makedirs(target_parent)
+                open(target, "a").close()
+        else:
+            no_target = not os.path.exists(target)
+            if no_target:
+                return
+
+        # Remove link_name if already exist
+        if os.path.isdir(link_name) and not os.path.islink(link_name):
+            shutil.rmtree(link_name)
+        elif os.path.lexists(link_name):
+            os.unlink(link_name)
+
+        # Make the symlink
+        if not os.path.exists(link_name_parent):
+            os.makedirs(link_name_parent)
+        IO.write("ln -s %s %s" % (target, link_name))
+        os.symlink(target, link_name)
+
+        # Symlink link_name and it's parents
+        if link_name not in paths_to_chown:
+            paths_to_chown.append(link_name)
+        path_to_chown = os.path.dirname(link_name)
+        while path_to_chown.startswith(user.home_dir):
+            if path_to_chown not in paths_to_chown:
+                paths_to_chown.append(path_to_chown)
+            path_to_chown = os.path.dirname(path_to_chown)
+
+
 
     ## Make homedir
     make_homedir(user)
@@ -878,88 +937,13 @@ def proceed_roaming_open(config, user):
     filers_mount(config, user)
 
     ## Links
-    with UserIdentity(user):
-        for target, link_name in config["links"]:
-            target_is_dir = False
-            force_target = False
-            if re.search(r'/$', target):
-                target_is_dir = True
-            if re.match(r'\+', target):
-                force_target = True
-                target = target[1:]
+    # with UserIdentity(user):
+    for target, link_name in config["links"] + config["su_links"]:
+        prepare_link(target, link_name, user)
 
-            target = os.path.normpath(os.path.join(user.home_dir, target))
-            target_parent = os.path.normpath(target + "/..")
-            link_name = os.path.normpath(os.path.join(user.home_dir, link_name))
-            link_name_parent = os.path.normpath(link_name + "/..")
-
-            if not os.path.lexists(target):
-                if force_target:
-                    if target_is_dir:
-                        os.makedirs(target)       # mkdir target
-                    else:
-                        if not os.path.lexists(target_parent):
-                            os.makedirs(target_parent)
-                        open(target, "a").close() # touch target
-                else:
-                    continue
-            if os.path.lexists(link_name):
-                if os.path.exists(target): # link_name and target exists -> use target
-                    if os.path.isdir(link_name) and not os.path.islink(link_name):
-                        shutil.rmtree(link_name)
-                    else:
-                        os.unlink(link_name)
-                else:
-                    continue
-            if not os.path.exists(link_name_parent):
-                os.makedirs(link_name_parent)
-
-            IO.write("ln -s %s %s" % (target, link_name))
-            os.symlink(target, link_name)
-
-    ## su_Links (links done as root and chown afterward)
-    for target, link_name in config["su_links"]:
-        target_is_dir = False
-        force_target = False
-        if re.search(r'/$', target):
-            target_is_dir = True
-        if re.match(r'\+', target):
-            force_target = True
-            target = target[1:]
-
-        target = os.path.normpath(os.path.join(user.home_dir, target))
-        target_parent = os.path.normpath(target + "/..")
-        link_name = os.path.normpath(os.path.join(user.home_dir, link_name))
-        link_name_parent = os.path.normpath(link_name + "/..")
-
-        if not os.path.lexists(target):
-            if force_target:
-                if target_is_dir:
-                    os.makedirs(target)       # mkdir target
-                else:
-                    if not os.path.lexists(target_parent):
-                        os.makedirs(target_parent)
-                    open(target, "a").close() # touch target
-                run_cmd(
-                    cmd=["chown", "%s:" % user.username, target]
-                )
-            else:
-                continue
-        if os.path.lexists(link_name):
-            if os.path.exists(target): # link_name and target exists -> use target
-                if os.path.isdir(link_name) and not os.path.islink(link_name):
-                    shutil.rmtree(link_name)
-                else:
-                    os.unlink(link_name)
-            else:
-                continue
-        if not os.path.exists(link_name_parent):
-            os.makedirs(link_name_parent)
-
-        IO.write("ln -s %s %s" % (target, link_name))
-        os.symlink(target, link_name)
+    if len(paths_to_chown) != 0:
         run_cmd(
-            cmd=["chown", "-h", "%s:" % user.username, link_name]
+            cmd=["chown", "-h", "%s:" % user.username] + paths_to_chown
         )
 
 def proceed_roaming_close(options, config, user):
