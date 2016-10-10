@@ -33,16 +33,6 @@
 #   does :
 #     - run roaming_close for every user still logged
 #
-# - epfl_roaming.py --torque_prologue
-#   trigged by /var/spool/torque/mom_priv/prologue
-#   does :
-#     - empty home dir for user
-#
-# - epfl_roaming.py --torque_epilogue
-#   trigged by /var/spool/torque/mom_priv/epilogue
-#   does :
-#     - simple remove home dir if not other session for that user
-#
 
 ###
 # Requires :
@@ -268,20 +258,6 @@ def read_options():
         dest="context",
         const="test_dump",
     )
-    parser.add_argument(
-        "--torque_prologue",
-        help="Prepare home dir for Torque job",
-        action="store_const",
-        dest="context",
-        const="torque_prologue",
-    )
-    parser.add_argument(
-        "--torque_epilogue",
-        help="Close home dir after Torque job",
-        action="store_const",
-        dest="context",
-        const="torque_epilogue",
-    )
     options = parser.parse_args()
 
     if options.context == None:
@@ -304,8 +280,6 @@ def read_user(options, on_halt_username=None):
         user.conn_tty = os.environ.get("PAM_TTY", None)
         # TYPE : open_session | close_session
         user.conn_type = os.environ.get("PAM_TYPE", None)
-    elif options.context in ("torque_prologue", "torque_epilogue"):
-        user.username = os.environ.get("USER", None)
     elif options.context == "on_halt":
         user.username = on_halt_username
     else:
@@ -313,8 +287,7 @@ def read_user(options, on_halt_username=None):
     user.home_dir = os.path.expanduser("~%s" % user.username)
 
     # shortcuts
-    if (options.context in ("torque_prologue", "torque_epilogue")) or \
-       (not user.home_dir.startswith("/home/")):
+    if not user.home_dir.startswith("/home/"):
         return user
 
     try:
@@ -375,7 +348,7 @@ def check_options(options, user):
     if options.context == "pam" and user.conn_service not in ("lightdm", "sshd", "login", "common-session"):
         IO.write("Not doing anything for PAM_SERVICE '%s'" % user.conn_service)
         sys.exit(0)
-    if options.context in ("pam", "on_halt", "torque_prologue", "torque_epilogue") and os.geteuid() != 0:
+    if options.context in ("pam", "on_halt") and os.geteuid() != 0:
         IO.write("Error: this should be run as root.")
         sys.exit(1)
     if options.context == "session" and os.geteuid() == 0:
@@ -429,9 +402,6 @@ def read_config(options, user):
             self.reason = reason
 
     conf = {"mounts" : {}, "links" : [], "su_links" : [], "gconf" : {}, "dconf" : {},}
-
-    if options.context in ("torque_prologue", "torque_epilogue"):
-        return conf
 
     gconf_file = ""
     dconf_file = ""
@@ -891,36 +861,6 @@ def proceed_guest_close(user):
 
     IO.write("Nothing done ...")
 
-def proceed_torque_prologue(config, user):
-    IO.write("Proceeding Torque Prolog!")
-
-    ## Make Home dir
-    if not os.path.exists(user.home_dir):
-        IO.write("Make homedir")
-        run_cmd(
-            cmd=["cp", "-R", "/etc/skel", user.home_dir]
-        )
-        run_cmd(
-            cmd=["chown", "-R", "%s:" % user.username, user.home_dir]
-        )
-    else:
-        IO.write("Home dir already exists: nothing to do.")
-
-def proceed_torque_epilogue(config, user):
-    IO.write("Proceeding Torque Epilog!")
-
-    ## Remove Home dir
-    if os.path.exists(user.home_dir):
-        for i in xrange(RM_MAX_ATTEMPT):
-            success = run_cmd(
-                cmd=["rm", "-rf", "--one-file-system", user.home_dir]
-            )
-            if success:
-                break
-            time.sleep(RM_SLEEP)
-    else:
-        IO.write("Home dir doesn't exists: nothing to do.")
-
 def proceed_on_halt(options):
     def list_current_users():
         return [f[11:] for f in os.listdir("/tmp") if f.startswith("epfl_count")]
@@ -966,7 +906,7 @@ if __name__ == '__main__':
 
     user = read_user(options)
 
-    if options.context in ("pam", "torque_prologue", "torque_epilogue"):
+    if options.context in ("pam",):
         logfile_name = LOG_PAM
     else:
         logfile_name = LOG_SESSION.format(username=user.username)
@@ -974,10 +914,6 @@ if __name__ == '__main__':
     EPFL_ROAMING_DONE_FILE = os.path.join("/tmp/epfl_roaming_{}_done".format(user.username))
 
     with IO(logfile_name):
-        # IO.write(pprint.pformat(user))
-        #~ IO.write("ENV :")
-        #~ IO.write(pprint.pformat(os.environ))
-        #~ IO.write("\n")
         try:
             IO.write("\n*** %s" % datetime.datetime.now())
             operation = options.context
@@ -998,14 +934,6 @@ if __name__ == '__main__':
 
             config = read_config(options, user)
 
-            #~ IO.write("options")
-            #~ IO.write(pprint.pformat(options))
-            #~ IO.write("user")
-            #~ IO.write(pprint.pformat(user))
-            #~ IO.write("config")
-            #~ IO.write(pprint.pformat(config))
-            #~ sys.exit(0)
-
             if options.context == "pam":
                 if user.conn_type == "open_session":
                     with lockfile.FileLock(SEMAPHORE_LOCK_FILE):
@@ -1024,16 +952,6 @@ if __name__ == '__main__':
 
             elif options.context == "session":
                 dconf_load(config, user)
-
-            elif options.context == "torque_prologue":
-                with lockfile.FileLock(SEMAPHORE_LOCK_FILE):
-                    proceed_torque_prologue(config, user)
-            elif options.context == "torque_epilogue":
-                with lockfile.FileLock(SEMAPHORE_LOCK_FILE):
-                    if count_sessions(user, 0) == 0:
-                        proceed_torque_epilogue(config, user)
-                    else:
-                        IO.write("Sessions still opened for user %s. Nothing to do." % user.username)
 
             elif options.context == "test_load":
                 dconf_load(config, user, test=True)
