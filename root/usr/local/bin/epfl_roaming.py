@@ -611,118 +611,6 @@ def ismount(path):
     output = p.communicate()[0]
     return path in re.findall(r' on (\S+)\s+', output)
 
-def gconf_dump(config, user, test=False):
-    return # NOTE : We had no success with GConf and 12.04 ...
-    IO.write("gconf_dump")
-    try:
-        gconf_work_dir = os.path.join(user.home_dir, ".gconf")
-        for gconf_file in config["gconf"]:
-            gconf_dirs = {}
-
-            # extract expected dirs (if keys, then add key entry in a list)
-            for i in xrange(len(config["gconf"][gconf_file])):
-                # check that there are no englobing other
-                skip_this = False
-                path = config["gconf"][gconf_file][i]
-                for j in xrange(len(config["gconf"][gconf_file])):
-                    if i == j:
-                        continue
-                    if path.startswith(config["gconf"][gconf_file][j]):
-                        skip_this = True
-                        break
-                if skip_this:
-                    continue
-                # Store dir
-                if path[-1] == "/":
-                    gconf_dirs[path] = []
-                else:
-                    dirname = os.path.dirname(path)
-                    if dirname[-1] != "/":
-                        dirname += "/"
-                    keyname = os.path.basename(path)
-                    if len(gconf_dirs.get(dirname, [1])) == 0:
-                        continue # already included as a dir
-                    gconf_dirs.setdefault(dirname, []).append(keyname)
-
-            #~ IO.write("gconf_dirs :")
-            #~ pprint.pprint(gconf_dirs)
-
-            if len(gconf_dirs) != 0:
-                # Dump gconf dirs
-                # "dbus-launch", "--exit-with-session",
-                # "sudo", "-u", user.username,
-                # "--config-source=xml:readwrite:%s" % (gconf_work_dir),
-                if test:
-                    cmd = ["gconftool-2", "--config-source=xml:readwrite:%s" % (gconf_work_dir), "--dump"]
-                else:
-                    cmd = ["sudo", "-u", user.username, "dbus-launch", "--exit-with-session", "gconftool-2", "--dump"]
-                for gconf_dir in gconf_dirs:
-                    if gconf_dir == "/":
-                        cmd += (gconf_dir,)
-                    else:
-                        cmd += (gconf_dir[:-1],)
-                IO.write(" ".join(cmd))
-                if test:
-                    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                else:
-                    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env={})
-                complete_dump, stderr = p.communicate()
-                if stderr != "":
-                    IO.write("Error :\n" + "\n".join(["EE %s" % line for line in stderr.split("\n")]))
-
-                # Filter with xml.dom.minidom
-                dom = xml.dom.minidom.parseString(complete_dump)
-                saved_keys = []
-                for entrylist in dom.getElementsByTagName("entrylist"):
-                    base = entrylist.getAttribute("base")
-                    for entry in entrylist.getElementsByTagName("entry"):
-                        key_name = entry.getElementsByTagName("key")[0].childNodes[0].toxml()
-                        key_path = os.path.join(base, key_name)
-                        # Drop entry if not expected
-                        drop_entry = True
-                        for gconf_dir in gconf_dirs:
-                            if key_path.startswith(gconf_dir):
-                                if gconf_dirs[gconf_dir] == []:
-                                    drop_entry = False
-                                else:
-                                    for key in gconf_dirs[gconf_dir]:
-                                        if key_path == os.path.join(gconf_dir, key):
-                                            drop_entry = False
-                                            continue
-                        if drop_entry:
-                            entrylist.removeChild(entry)
-                        else:
-                            saved_keys.append(key_path)
-
-                # Save
-                gconf_file = os.path.join(user.home_dir, gconf_file)
-                IO.write("Saving to %s keys:\n%s" % (gconf_file, "\n".join(saved_keys)))
-                dir_save_to = os.path.dirname(gconf_file)
-                if not os.path.exists(dir_save_to):
-                    IO.write("mkdir -p %s" % dir_save_to)
-                    os.makedirs(dir_save_to)
-                f = open(gconf_file, "w")
-                #~ dom.writexml(f)
-                f.write(dom.toxml(encoding="utf-8"))
-                f.close()
-            else:
-                if os.path.exists(gconf_file) and os.path.isfile(gconf_file):
-                    os.unlink(gconf_file)
-    except Exception, e:
-        IO.write("Unexpected exception : %s" % e)
-
-def gconf_load(config, user, test=False):
-    return # NOTE : We had no success with GConf and 12.04 ...
-    IO.write("gconf_load")
-    user_gconf_dir = os.path.join(user.home_dir, ".gconf")
-    for gconf_file in config["gconf"]:
-        gconf_file = os.path.join(user.home_dir, gconf_file)
-        if os.path.exists(gconf_file):
-            # "--direct", "--config-source=xml:readwrite:%s" % user_gconf_dir ,
-            run_cmd(
-                cmd=["gconftool-2", "--load", gconf_file],
-            )
-
 def dconf_dump(config, user, test=False):
     if not os.path.exists(os.path.join(user.home_dir, ".config/dconf/user")):
         IO.write("dconf_dump : ~/.config/dconf/user not found -> Skipping.")
@@ -929,7 +817,6 @@ def proceed_roaming_open(config, user):
             path_to_chown = os.path.dirname(path_to_chown)
 
 
-
     ## Make homedir
     make_homedir(user)
 
@@ -978,7 +865,6 @@ def proceed_roaming_close(options, config, user):
                 #~ run_cmd(
                     #~ cmd=["sync"]
                 #~ )
-    gconf_dump(config, user)
     dconf_dump(config, user)
 
     ## Umounts (sudo)
@@ -1137,7 +1023,6 @@ if __name__ == '__main__':
                             os.unlink(EPFL_ROAMING_DONE_FILE)
 
             elif options.context == "session":
-                gconf_load(config, user)
                 dconf_load(config, user)
 
             elif options.context == "torque_prologue":
@@ -1151,10 +1036,8 @@ if __name__ == '__main__':
                         IO.write("Sessions still opened for user %s. Nothing to do." % user.username)
 
             elif options.context == "test_load":
-                gconf_load(config, user, test=True)
                 dconf_load(config, user, test=True)
             elif options.context == "test_dump":
-                gconf_dump(config, user, test=True)
                 dconf_dump(config, user, test=True)
 
             IO.write("Everything complete.")
