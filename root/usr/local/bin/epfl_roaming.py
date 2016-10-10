@@ -854,6 +854,10 @@ def proceed_on_halt(options):
                         user = read_user(options, username)
                         config = read_config(options, user)
                         proceed_roaming_close(options, config, user)
+                        try:
+                            os.unlink("/tmp/epfl_count_%s" % user.username)
+                        except OSError:
+                            pass
         except Exception, e:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             IO.write("\n".join(traceback.format_exception(exc_type, exc_value, exc_traceback)))
@@ -921,7 +925,6 @@ if __name__ == '__main__':
                             with open(EPFL_ROAMING_DONE_FILE, "w"):
                                 pass
                 elif user.conn_type == "close_session":
-                    time.sleep(0.5) # Give on_halt the chance to be the 1st!
                     with lockfile.FileLock(SEMAPHORE_LOCK_FILE):
                         if count_sessions(user, -1) == 0:
                             with PreventInterrupt():
