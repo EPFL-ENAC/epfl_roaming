@@ -1,42 +1,33 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-###
-# Bancal Samuel
-# 121002
+"""
+epfl_roaming : Script to make application's preferences move along with the user.
 
-# 121105 :
-# GConf can't make it work! Giving up for now.
++ It is called by PAM as root at session_open and session_close :
+$ epfl_roaming.py --pam
+    does :
+      - mount & umount
+      - files/folders ln -s & cp
+      - rm -rf at session_close
+      - DConf dump at session_close
 
-###
-# Usage :
-#
-# - epfl_roaming.py --pam
-#     trigged by PAM at session_open & session_close
-#     run as root
-#     does :
-#       - mount & umount
-#       - files/folders ln -s & cp
-#       - rm -rf at session_close
-#       - GConf dump (Disabled) at session_close
-#       - DConf dump at session_close
-#
-# - epfl_roaming.py --session
-#   trigged at Gnome/Unity new session
-#   as user
-#   does :
-#     - GConf load (Disabled)
-#     - DConf load
-#
-# - epfl_roaming.py --on_halt
-#   trigged by /etc/init/epfl_roaming.conf at shutdown/reboot
-#   does :
-#     - run roaming_close for every user still logged
-#
++ It is called by an autostart ~/.config/autostart/epfl_roaming.desktop as username :
+$ epfl_roaming.py --session
+  does :
+    - DConf load
 
-###
-# Requires :
-# sudo apt install python-lockfile
++ It is called by a systemd service /etc/systemd/system/epfl_roaming_on_shutdown.service at shutdown|reboot as root :
+$ epfl_roaming.py --on_halt
+  does :
+    - run roaming_close for every user still logged before network is turned off.
+
+It requires packages:
+$ sudo apt install python-lockfile
+
+It requires to work with script keep_cred.py
+"""
+
 
 import os
 import sys
@@ -46,7 +37,6 @@ import pwd, grp
 import ldap
 import pickle
 import subprocess
-# import pprint
 import lockfile
 import shutil
 import xml.dom.minidom
@@ -342,9 +332,6 @@ def check_options(options, user):
     """
         Performs all required checks
     """
-    #~ if options.context == "pam" and user.conn_service == "lightdm":
-        #~ IO.write("Not doing things for lightdm sessions trigged by PAM")
-        #~ sys.exit(0)
     if options.context == "pam" and user.conn_service not in ("lightdm", "sshd", "login", "common-session"):
         IO.write("Not doing anything for PAM_SERVICE '%s'" % user.conn_service)
         sys.exit(0)
@@ -600,7 +587,6 @@ def dconf_dump(config, user, test=False):
         for k in keys_to_save:
             IO.write("+ %s" % k)
             if k[-1] == "/":
-                #
                 if test:
                     cmd = ["dconf", "dump", k]
                 else:
@@ -618,7 +604,6 @@ def dconf_dump(config, user, test=False):
                     except IndexError, e:
                         dump_dconf += line + "\n"
             else:
-                #
                 if test:
                     cmd = ["dconf", "read", k]
                 else:
@@ -714,7 +699,6 @@ def filers_umount(config, user):
     return success
 
 def make_homedir(user):
-    ## Make homedir
     if not os.path.exists(user.home_dir):
         IO.write("Make homedir")
         run_cmd(
@@ -794,7 +778,6 @@ def proceed_roaming_open(config, user):
     filers_mount(config, user)
 
     ## Links
-    # with UserIdentity(user):
     for target, link_name in config["links"] + config["su_links"]:
         prepare_link(target, link_name, user)
 
@@ -832,17 +815,14 @@ def proceed_roaming_close(options, config, user):
                     run_cmd(
                         cmd=["cp", link_name, target],
                     )
-                #~ run_cmd(
-                    #~ cmd=["sync"]
-                #~ )
     dconf_dump(config, user)
 
-    ## Umounts (sudo)
+    # Umounts (sudo)
     if not filers_umount(config, user):
         IO.write("Skipping rm -rf.")
         return
 
-    ## RM
+    # RM
     for i in xrange(RM_MAX_ATTEMPT):
         success = run_cmd(
             cmd=["rm", "-rf", "--one-file-system", user.home_dir]
@@ -853,13 +833,11 @@ def proceed_roaming_close(options, config, user):
 
 def proceed_guest_open(user):
     IO.write("Proceeding guest 'open'!")
-
     make_homedir(user)
 
 def proceed_guest_close(user):
     IO.write("Proceeding guest 'close'!")
-
-    IO.write("Nothing done ...")
+    IO.write("Nothing to be done ...")
 
 def proceed_on_halt(options):
     def list_current_users():
@@ -889,7 +867,7 @@ def signal_handler(signum, frame):
     else:
         IO.write("not interruptible yet. Continuing...")
 
-### MAIN
+
 if __name__ == '__main__':
     username = os.environ.get("PAM_USER", None)
     if username is not None:
