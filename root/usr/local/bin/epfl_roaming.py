@@ -63,7 +63,9 @@ UMOUNT_SLEEP = 1
 
 UNLINK_CRED_FILE = True
 
-SEMAPHORE_LOCK_FILE = "/tmp/epfl_roaming_global_lock"
+VAR_RUN = "/var/run/epfl_roaming"
+SEMAPHORE_LOCK_FILE = "/var/run/epfl_roaming/global_lock"
+SESSIONS_COUNT_FILE = "/var/run/epfl_roaming/sessions_count"
 
 class PreventInterrupt(object):
     def __init__(self):
@@ -233,6 +235,13 @@ def read_options():
         action="store_const",
         dest="context",
         const="on_halt",
+    )
+    parser.add_argument(
+        "--list_users",
+        help="List users currently logged in and how many sessions they have.",
+        action="store_const",
+        dest="context",
+        const="list_users",
     )
     parser.add_argument(
         "--test_load",
@@ -498,30 +507,35 @@ def read_config(options, user):
 
     return conf
 
-def count_sessions(user, increment):
+def count_sessions(user, increment=0, clear_count=False):
     """
         Increments/decrements session count for current user
     """
-    user_count_file = "/tmp/epfl_count_%s" % user.username
-    IO.write("session counter :", eol="")
-    counter = 0 # default
     try:
-        with open(user_count_file, "r") as f:
-            counter = int(f.readline())
-    except (IOError, ValueError):
-        pass
+        with open(SESSIONS_COUNT_FILE, "rb") as f:
+            user_sessions = pickle.load(f)
+    except:
+        user_sessions = {}
+    user_sessions.setdefault(user.username, 0)
 
-    IO.write("%i -> %i" % (counter, counter + increment))
-    counter += increment
-    if counter > 0:
-        with open(user_count_file, "w") as f:
-            f.write("%i\n" % counter)
+    old_count = user_sessions[user.username]
+    if clear_count:
+        new_count = 0
+        user_sessions.pop(user.username)
     else:
-        try:
-            os.unlink(user_count_file)
-        except OSError:
-            pass
-    return counter
+        new_count = max(user_sessions[user.username] + increment, 0)
+        if new_count <= 0:
+            user_sessions.pop(user.username)
+        else:
+            user_sessions[user.username] = new_count
+    IO.write("%i -> %i" % (old_count, new_count))
+    try:
+        with open(SESSIONS_COUNT_FILE, "wb") as f:
+            pickle.dump(user_sessions, f)
+    except Exception, e:
+        IO.write("Error : %s" % e)
+        raise
+    return old_count, new_count
 
 def get_mount_point(mount_instruction):
     """
@@ -839,25 +853,38 @@ def proceed_guest_close(user):
     IO.write("Proceeding guest 'close'!")
     IO.write("Nothing to be done ...")
 
-def proceed_on_halt(options):
-    def list_current_users():
-        return [f[11:] for f in os.listdir("/tmp") if f.startswith("epfl_count")]
+def list_current_user_sessions(display=False):
+    try:
+        with open(SESSIONS_COUNT_FILE, "rb") as f:
+            user_sessions = pickle.load(f)
+    except:
+        user_sessions = {}
+    if display:
+        if len(user_sessions) == 0:
+            print "Currently, no user has an open session."
+        else:
+            print "Currently, these users have an open session :"
+            for username in user_sessions:
+                print "%s: %i" % (username, user_sessions[username])
+    return user_sessions
 
+
+def proceed_on_halt(options):
     with IO(LOG_PAM):
         IO.write("\n*** %s" % datetime.datetime.now())
         IO.write("Proceeding 'On Halt'!")
         try:
             with PreventInterrupt():
                 with lockfile.FileLock(SEMAPHORE_LOCK_FILE):
-                    for username in list_current_users():
+                    for username in list_current_user_sessions():
                         IO.write("on_halt %s" % username)
                         user = read_user(options, username)
-                        config = read_config(options, user)
-                        proceed_roaming_close(options, config, user)
-                        try:
-                            os.unlink("/tmp/epfl_count_%s" % user.username)
-                        except OSError:
-                            pass
+                        count_sessions(user, clear_count=True)
+                        if user.epfl_account_type == "guest":
+                            proceed_guest_close(user)
+                        else:
+                            config = read_config(options, user)
+                            proceed_roaming_close(options, config, user)
         except Exception, e:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             IO.write("\n".join(traceback.format_exception(exc_type, exc_value, exc_traceback)))
@@ -877,6 +904,11 @@ if __name__ == '__main__':
     if username is not None:
         PASSWORD = get_credentials(username)
 
+    try:
+        os.makedirs(VAR_RUN)
+    except OSError:
+        pass
+
     # Manage the kill -TERM  ... unfortunately not kill -9
     signal.signal(signal.SIGTERM, signal_handler)
     #~ signal.signal(signal.SIGKILL, signal_handler)
@@ -884,6 +916,9 @@ if __name__ == '__main__':
     options = read_options()
     if options.context == "on_halt":
         proceed_on_halt(options)
+        sys.exit(0)
+    if options.context == "list_users":
+        list_current_user_sessions(display=True)
         sys.exit(0)
 
     user = read_user(options)
@@ -909,9 +944,13 @@ if __name__ == '__main__':
             if user.epfl_account_type == "guest":
                 if options.context == "pam":
                     if user.conn_type == "open_session":
-                        proceed_guest_open(user)
+                        with lockfile.FileLock(SEMAPHORE_LOCK_FILE):
+                            if count_sessions(user, increment=+1) == (0, 1):
+                                proceed_guest_open(user)
                     elif user.conn_type == "close_session":
-                        proceed_guest_close(user)
+                        with lockfile.FileLock(SEMAPHORE_LOCK_FILE):
+                            if count_sessions(user, increment=-1) == (1, 0):
+                                proceed_guest_close(user)
                 sys.exit(0)
 
             config = read_config(options, user)
@@ -919,14 +958,14 @@ if __name__ == '__main__':
             if options.context == "pam":
                 if user.conn_type == "open_session":
                     with lockfile.FileLock(SEMAPHORE_LOCK_FILE):
-                        count_sessions(user, +1)
+                        count_sessions(user, increment=+1)
                         if PASSWORD is not None and not os.path.exists(EPFL_ROAMING_DONE_FILE):
                             proceed_roaming_open(config, user)
                             with open(EPFL_ROAMING_DONE_FILE, "w"):
                                 pass
                 elif user.conn_type == "close_session":
                     with lockfile.FileLock(SEMAPHORE_LOCK_FILE):
-                        if count_sessions(user, -1) == 0:
+                        if count_sessions(user, increment=-1) == (1, 0):
                             with PreventInterrupt():
                                 proceed_roaming_close(options, config, user)
                             os.unlink(EPFL_ROAMING_DONE_FILE)
