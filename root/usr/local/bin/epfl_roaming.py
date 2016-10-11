@@ -868,7 +868,6 @@ def list_current_user_sessions(display=False):
                 print "%s: %i" % (username, user_sessions[username])
     return user_sessions
 
-
 def proceed_on_halt(options):
     with IO(LOG_PAM):
         IO.write("\n*** %s" % datetime.datetime.now())
