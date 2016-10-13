@@ -23,6 +23,19 @@ EXT_FOLDER = "/usr/local/lib/manage_cred"
 EXT_FOLDER = os.path.normpath(os.path.join(__file__, "../../lib/manage_cred")) ## TODO DEBUG
 
 VAR_RUN = "/var/run/manage_cred"
+PID_FILE = "/var/run/manage_cred/manage_cred_{username}.pid"
+PID_FILE = os.path.normpath(os.path.join(__file__, "../manage_cred_{username}.pid")) ## TODO DEBUG
+
+class PID():
+    def __init__(self):
+        self.pid_file = PID_FILE.format(username=USERNAME)
+
+    def __enter__(self):
+        with open(self.pid_file, "w") as f:
+            f.write("%s\n" % os.getpid())
+
+    def __exit__(self, typ, val, tb):
+        os.unlink(self.pid_file)
 
 
 def fork_and_wait():
@@ -41,34 +54,40 @@ def fork_and_wait():
         if not an_ext_was_run:
             print "got USR1 signal, but no extension were run."
 
+    def signal_KILL_handler(signum, frame):
+        print "got TERM signal, gonna exit."
+        sys.exit(0)
+
     if os.fork() != 0:
         return
 
-    extensions = {}
+    with PID():
+        extensions = {}
 
-    # receive SIGUSR1 to trigger operations
-    signal.signal(signal.SIGUSR1, signal_USR1_handler)
+        # SIGUSR1 and SIGTERM handling
+        signal.signal(signal.SIGUSR1, signal_USR1_handler)
+        signal.signal(signal.SIGTERM, signal_KILL_handler)
 
-    sys.path.insert(0, EXT_FOLDER)
-    for f in os.listdir(EXT_FOLDER):
-        if f == "__init__.py" or not f.endswith(".py"):
-            continue
-        try:
-            ext_name = f[:-3]
-            mod = importlib.import_module(ext_name)
-            if ("FLAG_FILE" in dir(mod) and "run" in dir(mod) and
-                type(mod.FLAG_FILE) == str and callable(mod.run)):
-                extensions[ext_name] = mod
-            else:
-                print "Error, %s doesn't implement required variables and functions; Skipping." % ext_name
-        except Exception, e:
-            print "Error, could not import %s; Skipping." % ext_name
-            print e
+        sys.path.insert(0, EXT_FOLDER)
+        for f in os.listdir(EXT_FOLDER):
+            if f == "__init__.py" or not f.endswith(".py"):
+                continue
+            try:
+                ext_name = f[:-3]
+                mod = importlib.import_module(ext_name)
+                if ("FLAG_FILE" in dir(mod) and "run" in dir(mod) and
+                    type(mod.FLAG_FILE) == str and callable(mod.run)):
+                    extensions[ext_name] = mod
+                else:
+                    print "Error, %s doesn't implement required variables and functions; Skipping." % ext_name
+            except Exception, e:
+                print "Error, could not import %s; Skipping." % ext_name
+                print e
 
 
-    for i in range(MANAGE_CRED_TIMEOUT):
-        time.sleep(1)
-    print "Finished to wait for %i seconds; exiting." % MANAGE_CRED_TIMEOUT
+        for i in range(MANAGE_CRED_TIMEOUT):
+            time.sleep(1)
+        print "Finished to wait for %i seconds; exiting." % MANAGE_CRED_TIMEOUT
 
 
 if __name__ == "__main__":
