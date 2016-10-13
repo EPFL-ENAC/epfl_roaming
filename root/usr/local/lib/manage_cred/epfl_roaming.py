@@ -2,17 +2,17 @@
 # -*- coding: utf-8 -*-
 
 """
-epfl_roaming extension for keep_cred
+epfl_roaming extension for manage_cred
 
 It has to implement :
-+ FLAG_FILE : the file that flags it's epfl_roaming that sent USR1 signal to keep_cred
++ FLAG_FILE : the file that flags it's epfl_roaming that sent USR1 signal to manage_cred
 + run(username, password) method that does the job
 """
 
 import os
 import sys
 
-FLAG_FILE = "/var/run/epfl_roaming/keep_cred.flag"
+FLAG_FILE = "/var/run/epfl_roaming/manage_cred.flag"
 FLAG_FILE = "/tmp/epfl_roaming.flag"  # TODO DEBUG
 
 LOG_PAM = "/var/log/epfl_roaming.log"
@@ -56,7 +56,7 @@ class IO(object):
 
 def run(username, password):
     with IO(LOG_PAM):
-        IO.write("Running epfl_roaming extension from keep_cred for %s!!" % username)
+        IO.write("Running epfl_roaming extension from manage_cred for %s!!" % username)
 
 if __name__ == "__main__":
     print >> sys.stderr, "This is not to be run this way!"

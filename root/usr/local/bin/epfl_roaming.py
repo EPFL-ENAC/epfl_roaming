@@ -25,7 +25,7 @@ $ epfl_roaming.py --on_halt
 It requires packages:
 $ sudo apt install python-lockfile
 
-It requires to work with script keep_cred.py
+It requires to work with script manage_cred.py
 """
 
 

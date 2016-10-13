@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 
 """
-keep_cred : receives user credentials during pam auth.
-It keeps it until KEEP_CRED_TIMEOUT.
+manage_cred : receives user credentials during pam auth.
+It keeps it until MANAGE_CRED_TIMEOUT.
 Other applications (extensions) can ask it to do operations that need credentials.
 
-Extensions have to configure themselves with an /usr/local/lib/keep_cred/app.py
+Extensions have to configure themselves with an /usr/local/lib/manage_cred/app.py
 They have to implement :
-+ FLAG_FILE : the file that flags it's epfl_roaming that sent USR1 signal to keep_cred
++ FLAG_FILE : the file that flags it's epfl_roaming that sent USR1 signal to manage_cred
 + run(username, password) method that does the job
 """
 
@@ -18,11 +18,11 @@ import time
 import signal
 import importlib
 
-KEEP_CRED_TIMEOUT = 20  # sec
-EXT_FOLDER = "/usr/local/lib/keep_cred"
-EXT_FOLDER = os.path.normpath(os.path.join(__file__, "../../lib/keep_cred")) ## TODO DEBUG
+MANAGE_CRED_TIMEOUT = 20  # sec
+EXT_FOLDER = "/usr/local/lib/manage_cred"
+EXT_FOLDER = os.path.normpath(os.path.join(__file__, "../../lib/manage_cred")) ## TODO DEBUG
 
-VAR_RUN = "/var/run/keep_cred"
+VAR_RUN = "/var/run/manage_cred"
 
 
 def fork_and_wait():
@@ -66,9 +66,9 @@ def fork_and_wait():
             print e
 
 
-    for i in range(KEEP_CRED_TIMEOUT):
+    for i in range(MANAGE_CRED_TIMEOUT):
         time.sleep(1)
-    print "Finished to wait for %i seconds; exiting." % KEEP_CRED_TIMEOUT
+    print "Finished to wait for %i seconds; exiting." % MANAGE_CRED_TIMEOUT
 
 
 if __name__ == "__main__":
