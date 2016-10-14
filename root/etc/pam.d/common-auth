@@ -25,4 +25,4 @@ auth	required			pam_permit.so
 # and here are more per-package modules (the "Additional" block)
 # end of pam-auth-update config
 
-auth	optional			pam_exec.so expose_authtok quiet /usr/local/bin/manage_cred.py
+auth	optional			pam_exec.so log=/var/log/manage_cred.log expose_authtok quiet /usr/local/bin/manage_cred.py

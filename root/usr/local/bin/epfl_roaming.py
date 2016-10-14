@@ -61,7 +61,10 @@ RM_SLEEP = 1
 UMOUNT_MAX_ATTEMPT = 3
 UMOUNT_SLEEP = 1
 
-UNLINK_CRED_FILE = True
+MANAGE_CRED_FLAG_FILE = "/var/run/epfl_roaming/manage_cred.flag"
+MANAGE_CRED_PID_FILE = "/var/run/manage_cred/manage_cred_{username}.pid"
+MANAGE_CRED_TIMEOUT = 3
+MANAGE_CRED_TERM = True
 
 VAR_RUN = "/var/run/epfl_roaming"
 SEMAPHORE_LOCK_FILE = "/var/run/epfl_roaming/global_lock"
@@ -553,27 +556,6 @@ def get_mount_point(mount_instruction):
         IO.write("Aborting")
         sys.exit(1)
 
-def get_credentials(username):
-    cred_filename = "/tmp/%s_epfl_cred" % username
-
-    # Decode credential
-    def decode(username, enc_password):
-        username = unicode(username, 'utf-8')
-        factor = len(enc_password) / len(username) + 1
-        key = username * factor
-        password = "".join([unichr(ord(enc_password[i]) - ord(key[i])) for i in range(0, len(enc_password)) ])
-        return password.encode('utf-8')
-
-    try:
-        with open(cred_filename, "rb") as f:
-            if UNLINK_CRED_FILE:
-                os.unlink(cred_filename)
-            enc_password = pickle.load(f)
-    except Exception:
-        IO.write("Warning: could not load file %s, skipping." % cred_filename)
-        return None
-    return decode(username, enc_password)
-
 def ismount(path):
     """
         Replaces os.path.ismount which doesn't work for nfsv4 run from root
@@ -656,39 +638,31 @@ def dconf_load(config, user, test=False):
 
 def filers_mount(config, user):
     """
-        Performs all mount
-        return True if all succeed
-        return False if one failed
+        Triggers manage_cred's extension to mount for us
     """
-    IO.write("Proceeding mount!")
-    success = True
-    if PASSWORD != None:
-        os.environ['PASSWD'] = PASSWORD # For CIFS mounts
-    for mount_point, mount_instruction in config["mounts"].items():
-        if not os.path.exists(mount_point):
-            #~ os.makedirs(mount_point)
-            run_cmd(
-                cmd=["mkdir", "-p", mount_point]
-            )
-            run_cmd(
-                cmd=["chown", "%s:" % user.username, mount_point]
-            )
-            # chown parents also
-            parent_dir = os.path.dirname(mount_point)
-            while parent_dir.startswith(user.home_dir):
-                run_cmd(
-                    cmd=["chown", "%s:" % user.username, parent_dir]
-                )
-                parent_dir = os.path.dirname(parent_dir)
-        run_cmd(
-            cmd=mount_instruction,
-            shell=True,
-        )
-        if not ismount(mount_point):
-            success = False
-    if PASSWORD != None:
-        del os.environ['PASSWD']
-    return success
+    try:
+        with open(MANAGE_CRED_PID_FILE.format(username=user.username), "r") as f:
+            manage_cred_pid = int(f.readline())
+    except:
+        IO.write("Warning, could not find manage_cred process. Not gonna mount filers.")
+        return
+
+    open(MANAGE_CRED_FLAG_FILE, "a").close()
+
+    os.kill(manage_cred_pid, signal.SIGUSR1)
+
+    manage_cred_finished = False
+    for _ in range(MANAGE_CRED_TIMEOUT*10):
+        time.sleep(0.1)
+        if not os.path.exists(MANAGE_CRED_FLAG_FILE):
+            manage_cred_finished = True
+            break
+
+    if not manage_cred_finished:
+        IO.write("Warning, manage_cred didn't complete mount filers.")
+
+    if MANAGE_CRED_TERM:
+        os.kill(manage_cred_pid, signal.SIGTERM)
 
 def filers_umount(config, user):
     """
@@ -899,10 +873,6 @@ def signal_handler(signum, frame):
 
 
 if __name__ == '__main__':
-    username = os.environ.get("PAM_USER", None)
-    if username is not None:
-        PASSWORD = get_credentials(username)
-
     try:
         os.makedirs(VAR_RUN)
     except OSError:
@@ -926,8 +896,6 @@ if __name__ == '__main__':
         logfile_name = LOG_PAM
     else:
         logfile_name = LOG_SESSION.format(username=user.username)
-
-    EPFL_ROAMING_DONE_FILE = os.path.join("/tmp/epfl_roaming_{}_done".format(user.username))
 
     with IO(logfile_name):
         try:
@@ -957,17 +925,13 @@ if __name__ == '__main__':
             if options.context == "pam":
                 if user.conn_type == "open_session":
                     with lockfile.FileLock(SEMAPHORE_LOCK_FILE):
-                        count_sessions(user, increment=+1)
-                        if PASSWORD is not None and not os.path.exists(EPFL_ROAMING_DONE_FILE):
+                        if count_sessions(user, increment=+1) == (0, 1):
                             proceed_roaming_open(config, user)
-                            with open(EPFL_ROAMING_DONE_FILE, "w"):
-                                pass
                 elif user.conn_type == "close_session":
                     with lockfile.FileLock(SEMAPHORE_LOCK_FILE):
                         if count_sessions(user, increment=-1) == (1, 0):
                             with PreventInterrupt():
                                 proceed_roaming_close(options, config, user)
-                            os.unlink(EPFL_ROAMING_DONE_FILE)
 
             elif options.context == "session":
                 dconf_load(config, user)

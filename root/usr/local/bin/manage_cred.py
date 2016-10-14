@@ -20,11 +20,9 @@ import importlib
 
 MANAGE_CRED_TIMEOUT = 20  # sec
 EXT_FOLDER = "/usr/local/lib/manage_cred"
-EXT_FOLDER = os.path.normpath(os.path.join(__file__, "../../lib/manage_cred")) ## TODO DEBUG
 
 VAR_RUN = "/var/run/manage_cred"
 PID_FILE = "/var/run/manage_cred/manage_cred_{username}.pid"
-PID_FILE = os.path.normpath(os.path.join(__file__, "../manage_cred_{username}.pid")) ## TODO DEBUG
 
 class PID():
     def __init__(self):
