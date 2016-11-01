@@ -219,7 +219,7 @@ def read_options():
     parser = argparse.ArgumentParser(description="EPFL Roaming.")
     parser.add_argument(
         "--pam",
-        help="PAM related actions (!=lightdm) : filers (u)mount, folders/files link/copy, GConf/DConf save",
+        help="PAM related actions (!=lightdm) : filers (u)mount, folders/files link/copy, DConf save",
         action="store_const",
         dest="context",
         default=None,
@@ -227,7 +227,7 @@ def read_options():
     )
     parser.add_argument(
         "--session",
-        help="Session (GConf/DConf load)",
+        help="Session (DConf load)",
         action="store_const",
         dest="context",
         const="session",
@@ -248,14 +248,14 @@ def read_options():
     )
     parser.add_argument(
         "--test_load",
-        help="Load GConf and DConf (test)",
+        help="Load DConf (test)",
         action="store_const",
         dest="context",
         const="test_load",
     )
     parser.add_argument(
         "--test_dump",
-        help="Dump GConf and DConf (test)",
+        help="Dump DConf (test)",
         action="store_const",
         dest="context",
         const="test_dump",
@@ -400,9 +400,8 @@ def read_config(options, user):
             self.line = line
             self.reason = reason
 
-    conf = {"mounts" : {}, "links" : [], "su_links" : [], "gconf" : {}, "dconf" : {},}
+    conf = {"mounts" : {}, "links" : [], "su_links" : [], "dconf" : {},}
 
-    gconf_file = ""
     dconf_file = ""
 
     try:
@@ -442,24 +441,6 @@ def read_config(options, user):
                             target = apply_subst(target, user)
                             link_name = apply_subst(link_name, user)
                             conf["su_links"].append((target, link_name))
-                        except IndexError, e:
-                            raise ConfigLineException(line, reason="syntax")
-
-                    ## gconf file
-                    elif subject == "gconf_file":
-                        try:
-                            gconf_file = re.findall(r'"(.+)"', line)[0]
-                            gconf_file = apply_subst(gconf_file, user)
-                        except IndexError, e:
-                            raise ConfigLineException(line, reason="syntax")
-
-                    ## gconf entry
-                    elif subject == "gconf":
-                        if gconf_file == "":
-                            raise ConfigLineException(line, reason="gconf key before gconf_file instruction")
-                        try:
-                            gconf_entry = re.findall(r'"(.+)"', line)[0]
-                            conf["gconf"].setdefault(gconf_file, []).append(gconf_entry)
                         except IndexError, e:
                             raise ConfigLineException(line, reason="syntax")
 
