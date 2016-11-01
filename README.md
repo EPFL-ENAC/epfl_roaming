@@ -44,4 +44,4 @@ The files related to epfl_roaming :
 sudo make install
 ~~~
 
-Note : This process has been validated on Ubuntu 16.04. Adaptations will be needed for Ubuntu 14.04 or Linux flavors.
+Note : This process has been validated on Ubuntu 16.04. Adaptations will be needed for Ubuntu 14.04 or other GNU/Linux flavors.
