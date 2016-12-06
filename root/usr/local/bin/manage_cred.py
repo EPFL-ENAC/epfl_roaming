@@ -6,8 +6,11 @@ manage_cred : receives user credentials during pam auth.
 It keeps it until MANAGE_CRED_TIMEOUT.
 Other applications (extensions) can ask it to do operations that need credentials.
 
-Extensions have to configure themselves with an /usr/local/lib/manage_cred/app.py
-They have to implement :
+The folder /usr/local/lib/manage_cred/ is the place where extensions have to be
+installed. It has to be root:root 0x700.
+
+Each extension file /usr/local/lib/manage_cred/*.py has to be root:root 0x600.
+It has to implement :
 + FLAG_FILE : the file that flags it's epfl_roaming that sent USR1 signal to manage_cred
 + run(username, password) method that does the job
 """
