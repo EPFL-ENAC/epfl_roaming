@@ -17,7 +17,7 @@ install:
 	rm -f $(tmpfile)
 	install -o root -g root -m 755 root/usr/local/bin/manage_cred.py /usr/local/bin
 	install -o root -g root -m 755 root/usr/local/bin/epfl_roaming.py /usr/local/bin
-	install -o root -g root -m 755 root/usr/local/lib/manage_cred/ext_epfl_roaming.py /usr/local/lib/manage_cred
+	install -o root -g root -m 600 root/usr/local/lib/manage_cred/ext_epfl_roaming.py /usr/local/lib/manage_cred
 	install -o root -g root -m 644 root/usr/local/etc/epfl_roaming.conf /usr/local/etc
 	install -o root -g root -m 644 root/etc/skel/.config/autostart/epfl_roaming.desktop /etc/skel/.config/autostart
 	install -o root -g root -m 644 root/etc/systemd/system/epfl_roaming_on_shutdown.service /etc/systemd/system

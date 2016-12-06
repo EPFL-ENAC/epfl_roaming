@@ -15,6 +15,7 @@ They have to implement :
 import os
 import sys
 import time
+import stat
 import signal
 import importlib
 
@@ -66,10 +67,28 @@ def fork_and_wait():
         signal.signal(signal.SIGUSR1, signal_USR1_handler)
         signal.signal(signal.SIGTERM, signal_KILL_handler)
 
+        # Check that Extension folder has correct rights : root:root 0x700
+        ext_folder_stat = os.stat(EXT_FOLDER)
+        if (ext_folder_stat.st_uid != 0 or
+            ext_folder_stat.st_gid != 0 or
+            ext_folder_stat.st_mode & (stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO) != stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR):
+            print "Error, extensions folder %s doesn't have correct rights : root:root 0x700.\nAborting." % EXT_FOLDER
+            sys.exit(1)
+
         sys.path.insert(0, EXT_FOLDER)
         for f in os.listdir(EXT_FOLDER):
             if f == "__init__.py" or not f.endswith(".py"):
                 continue
+
+            # check extension has correct rights : root:root 0x600
+            ext_path = os.path.join(EXT_FOLDER, f)
+            ext_stat = os.stat(ext_path)
+            if (ext_stat.st_uid != 0 or
+                ext_stat.st_gid != 0 or
+                ext_stat.st_mode & (stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO) != stat.S_IRUSR | stat.S_IWUSR):
+                print "Error, extensions %s doesn't have correct rights : root:root 0x600.\nSkipping." % ext_path
+                continue
+
             try:
                 ext_name = f[:-3]
                 mod = importlib.import_module(ext_name)
