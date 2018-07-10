@@ -41,7 +41,7 @@ class PID():
 
 
 def fork_and_wait():
-    def signal_USR1_handler(signum, frame):
+    def signal_USR2_handler(signum, frame):
         an_ext_was_run = False
         for ext in extensions:
             if os.path.exists(extensions[ext].FLAG_FILE):
@@ -54,7 +54,7 @@ def fork_and_wait():
                     pass
                 print "done."
         if not an_ext_was_run:
-            print "got USR1 signal, but no extension were run."
+            print "got USR2 signal, but no extension were run."
 
     def signal_KILL_handler(signum, frame):
         print "got TERM signal, gonna exit."
@@ -66,8 +66,8 @@ def fork_and_wait():
     with PID():
         extensions = {}
 
-        # SIGUSR1 and SIGTERM handling
-        signal.signal(signal.SIGUSR1, signal_USR1_handler)
+        # SIGUSR2 and SIGTERM handling
+        signal.signal(signal.SIGUSR2, signal_USR2_handler)
         signal.signal(signal.SIGTERM, signal_KILL_handler)
 
         # Check that Extension folder has correct rights : root:root 0x700

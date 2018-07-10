@@ -5,7 +5,7 @@
 epfl_roaming extension for manage_cred
 
 It has to implement :
-+ FLAG_FILE : the file that flags it's epfl_roaming that sent USR1 signal to manage_cred
++ FLAG_FILE : the file that flags it's epfl_roaming that sent USR2 signal to manage_cred
 + run(username, password) method that does the job
 """
 
