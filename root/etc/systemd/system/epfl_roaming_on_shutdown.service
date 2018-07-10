@@ -2,7 +2,7 @@
 Description=Run epfl_roaming on shutdown to make sure everything is repatriated
 
 # After= ... makes sure network is still available during ExecStop execution
-After=network.target
+After=network.target multi-user.target
 
 [Service]
 ExecStart=/bin/true

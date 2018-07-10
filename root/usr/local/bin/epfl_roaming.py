@@ -275,7 +275,7 @@ def read_user(options, on_halt_username=None):
     user = NameSpace()
     if options.context == "pam":
         user.username = os.environ.get("PAM_USER", None)
-        # SERVICE : lightdm | sshd | login
+        # SERVICE : lightdm | sshd | login | gdm-password
         # other services (like slurm) are not taken in account in epfl_roaming
         user.conn_service = os.environ.get("PAM_SERVICE", None)
         # TTY : :0 | ssh
@@ -344,7 +344,7 @@ def check_options(options, user):
     """
         Performs all required checks
     """
-    if options.context == "pam" and user.conn_service not in ("lightdm", "sshd", "login", "common-session"):
+    if options.context == "pam" and user.conn_service not in ("lightdm", "sshd", "login", "common-session", "gdm-password"):
         IO.write("Not doing anything for PAM_SERVICE '%s'" % user.conn_service)
         sys.exit(0)
     if options.context in ("pam", "on_halt") and os.geteuid() != 0:
@@ -373,8 +373,8 @@ def check_options(options, user):
         try:
             user.epfl_account_type
         except AttributeError:
-            IO.write("Warning: Incomplete user informations found. Exiting.")
-            sys.exit(1)
+            IO.write("Warning: Incomplete user informations found in LDAP. Exiting.")
+            sys.exit(0)
 
 def apply_subst(name, user):
     name = re.sub(r'_SCIPER_DIGIT_', user.sciper_digit, name)
@@ -630,7 +630,7 @@ def filers_mount(config, user):
 
     open(MANAGE_CRED_FLAG_FILE, "a").close()
 
-    os.kill(manage_cred_pid, signal.SIGUSR1)
+    os.kill(manage_cred_pid, signal.SIGUSR2)
 
     manage_cred_finished = False
     for _ in range(MANAGE_CRED_TIMEOUT*10):
