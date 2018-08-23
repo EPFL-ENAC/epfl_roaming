@@ -11,6 +11,7 @@ It has to implement :
 
 import os
 import sys
+import pwd
 import subprocess
 
 FLAG_FILE = "/var/run/epfl_roaming/manage_cred.flag"
@@ -18,7 +19,7 @@ FLAG_FILE = "/var/run/epfl_roaming/manage_cred.flag"
 EPFL_ROAMING_FOLDER = "/usr/local/bin"
 
 sys.path.append(EPFL_ROAMING_FOLDER)
-from epfl_roaming import IO, LOG_PAM, read_user, read_config, run_cmd, NameSpace
+from epfl_roaming import IO, LOG_PAM, read_user, read_config, run_cmd, NameSpace, UserIdentity
 
 def run(username, password):
     """
@@ -32,20 +33,15 @@ def run(username, password):
         config = read_config(options, user)
         for mount_point, mount_instruction in config["mounts"].items():
             if not os.path.exists(mount_point):
-                run_cmd(
-                    cmd=["mkdir", "-p", mount_point]
-                )
-                run_cmd(
-                    cmd=["chown", "%s:" % username, mount_point]
-                )
-                # chown parents also
-                parent_dir = os.path.dirname(mount_point)
-                while parent_dir.startswith(user.home_dir):
+                user = NameSpace()
+                user.username = username
+                pw = pwd.getpwnam(user.username)
+                user.uid = str(pw.pw_uid)
+                user.gid = str(pw.pw_gid)
+                with UserIdentity(user):
                     run_cmd(
-                        cmd=["chown", "%s:" % username, parent_dir]
+                        cmd=["mkdir", "-p", mount_point]
                     )
-                    parent_dir = os.path.dirname(parent_dir)
-
             # Mount
             os.environ['PASSWD'] = password
             run_cmd(

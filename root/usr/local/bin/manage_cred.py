@@ -11,7 +11,7 @@ installed. It has to be root:root 0x700.
 
 Each extension file /usr/local/lib/manage_cred/*.py has to be root:root 0x600.
 It has to implement :
-+ FLAG_FILE : the file that flags it's epfl_roaming that sent USR1 signal to manage_cred
++ FLAG_FILE : the file that flags it's epfl_roaming that sent USR2 signal to manage_cred
 + run(username, password) method that does the job
 """
 
@@ -112,6 +112,7 @@ def fork_and_wait():
 
 if __name__ == "__main__":
     USERNAME = os.environ["PAM_USER"]
+    USERNAME = USERNAME.split('@')[0]
     SERVICE = os.environ["PAM_SERVICE"]
     TYPE = os.environ["PAM_TYPE"]
 

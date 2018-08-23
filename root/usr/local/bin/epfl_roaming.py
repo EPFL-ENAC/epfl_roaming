@@ -286,6 +286,7 @@ def read_user(options, on_halt_username=None):
         user.username = on_halt_username
     else:
         user.username = pwd.getpwuid(os.getuid())[0]
+    user.username = user.username.split('@')[0]
     user.home_dir = os.path.expanduser("~%s" % user.username)
 
     # shortcuts
@@ -681,7 +682,6 @@ def make_homedir(user):
 
 def proceed_roaming_open(config, user):
     IO.write("Proceeding roaming 'open'!")
-    paths_to_chown = []
 
     def prepare_link(target, link_name, user):
         if re.search(r'/$', target):
@@ -730,61 +730,49 @@ def proceed_roaming_open(config, user):
         IO.write("ln -s %s %s" % (target, link_name))
         os.symlink(target, link_name)
 
-        # Symlink link_name and it's parents
-        if link_name not in paths_to_chown:
-            paths_to_chown.append(link_name)
-        path_to_chown = os.path.dirname(link_name)
-        while path_to_chown.startswith(user.home_dir):
-            if path_to_chown not in paths_to_chown:
-                paths_to_chown.append(path_to_chown)
-            path_to_chown = os.path.dirname(path_to_chown)
-
-
     ## Make homedir
     make_homedir(user)
 
     ## Mounts (sudo)
     filers_mount(config, user)
 
-    ## Links
-    for target, link_name in config["links"] + config["su_links"]:
-        prepare_link(target, link_name, user)
+    with UserIdentity(user):
+        ## Links
+        for target, link_name in config["links"] + config["su_links"]:
+            prepare_link(target, link_name, user)
 
-    if len(paths_to_chown) != 0:
-        run_cmd(
-            cmd=["chown", "-h", "%s:" % user.username] + paths_to_chown
-        )
 
 def proceed_roaming_close(options, config, user):
     IO.write("Proceeding roaming 'close'!")
 
     ## Links
-    for target, link_name in config["links"]:
-        if re.match(r'\+', target):
-            target = target[1:]
-        target = os.path.normpath(os.path.join(user.home_dir, target))
-        target_parent = os.path.normpath(target + "/..")
-        link_name = os.path.normpath(os.path.join(user.home_dir, link_name))
-        link_name_parent = os.path.normpath(link_name + "/..")
-        if os.path.exists(link_name):
-            if os.path.realpath(link_name) != os.path.realpath(target):
-                # link_name doesn't point to target -> new content -> rm old content.
-                run_cmd(
-                    cmd=["rm", "-rf", "--one-file-system", target],
-                )
-            if not os.path.exists(target):
-                if not os.path.lexists(target_parent):
-                    IO.write("mkdir -p %s" % target_parent)
-                    os.makedirs(target_parent)
-                if os.path.isdir(link_name):
+    with UserIdentity(user):
+        for target, link_name in config["links"]:
+            if re.match(r'\+', target):
+                target = target[1:]
+            target = os.path.normpath(os.path.join(user.home_dir, target))
+            target_parent = os.path.normpath(target + "/..")
+            link_name = os.path.normpath(os.path.join(user.home_dir, link_name))
+            link_name_parent = os.path.normpath(link_name + "/..")
+            if os.path.exists(link_name):
+                if os.path.realpath(link_name) != os.path.realpath(target):
+                    # link_name doesn't point to target -> new content -> rm old content.
                     run_cmd(
-                        cmd=["cp", "-R", link_name, target],
+                        cmd=["rm", "-rf", "--one-file-system", target],
                     )
-                else:
-                    run_cmd(
-                        cmd=["cp", link_name, target],
-                    )
-    dconf_dump(config, user)
+                if not os.path.exists(target):
+                    if not os.path.lexists(target_parent):
+                        IO.write("mkdir -p %s" % target_parent)
+                        os.makedirs(target_parent)
+                    if os.path.isdir(link_name):
+                        run_cmd(
+                            cmd=["cp", "-R", link_name, target],
+                        )
+                    else:
+                        run_cmd(
+                            cmd=["cp", link_name, target],
+                        )
+        dconf_dump(config, user)
 
     # Umounts (sudo)
     if not filers_umount(config, user):
