@@ -682,6 +682,22 @@ def make_homedir(user):
 
 def proceed_roaming_open(config, user):
     IO.write("Proceeding roaming 'open'!")
+    folders_to_mkdir_as_root = []
+
+    def mkdir(folder_name, as_root=False):
+        IO.write("mkdir -p %s" % folder_name)
+        try:
+            os.makedirs(folder_name)
+        except OSError:
+            if not as_root:
+                folders_to_mkdir_as_root.append(folder_name)
+                IO.write("... failed. Will retry as root later!")
+            else:
+                IO.write("... failed.")
+        if as_root:
+            run_cmd(
+                cmd=["chown", "-R", "%s:" % user.username, folder_name]
+            )
 
     def prepare_link(target, link_name, user):
         if re.search(r'/$', target):
@@ -708,10 +724,10 @@ def proceed_roaming_open(config, user):
             # create target if non existent
             if target_is_dir:
                 if not os.path.exists(target):
-                    os.makedirs(target)
+                    mkdir(target)
             else:
                 if not os.path.exists(target_parent):
-                    os.makedirs(target_parent)
+                    mkdir(target_parent)
                 open(target, "a").close()
         else:
             no_target = not os.path.exists(target)
@@ -726,7 +742,7 @@ def proceed_roaming_open(config, user):
 
         # Make the symlink
         if not os.path.exists(link_name_parent):
-            os.makedirs(link_name_parent)
+            mkdir(link_name_parent)
         IO.write("ln -s %s %s" % (target, link_name))
         os.symlink(target, link_name)
 
@@ -740,6 +756,9 @@ def proceed_roaming_open(config, user):
         ## Links
         for target, link_name in config["links"] + config["su_links"]:
             prepare_link(target, link_name, user)
+
+    for folder_name in folders_to_mkdir_as_root:
+        mkdir(folder_name, as_root=True)
 
 
 def proceed_roaming_close(options, config, user):
