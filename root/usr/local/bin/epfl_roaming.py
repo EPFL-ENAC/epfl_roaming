@@ -162,17 +162,17 @@ class NameSpace(object):
 class Ldap(object):
     def __init__(self):
         success = False
-        for _ in xrange(LDAP_NB_RETRY):
+        for _ in range(LDAP_NB_RETRY):
             try:
                 self.l = ldap.initialize(LDAP_SERVER)
                 success = True
-            except Exception, e:
+            except Exception as e:
                 time.sleep(1)
         if not success:
             raise e
 
     def search_s(self, l_filter, l_attrs):
-        for _ in xrange(LDAP_NB_RETRY):
+        for _ in range(LDAP_NB_RETRY):
             try:
                 return self.l.search_s(
                     base=LDAP_BASE_DN,
@@ -180,7 +180,7 @@ class Ldap(object):
                     filterstr=l_filter,
                     attrlist=l_attrs
                 )
-            except Exception, e:
+            except Exception as e:
                 time.sleep(1)
         raise e
 
@@ -215,7 +215,7 @@ def read_options():
     """
         Parse command line args
     """
-    print " ".join(sys.argv)
+    print(" ".join(sys.argv))
     parser = argparse.ArgumentParser(description="EPFL Roaming.")
     parser.add_argument(
         "--pam",
@@ -414,7 +414,7 @@ def read_config(options, user):
                         continue
                     try:
                         subject = re.findall(r'(\S+)', line)[0]
-                    except IndexError, e:
+                    except IndexError as e:
                         raise ConfigLineException(line, reason="syntax")
 
                     ## Mounts
@@ -432,7 +432,7 @@ def read_config(options, user):
                             target = apply_subst(target, user)
                             link_name = apply_subst(link_name, user)
                             conf["links"].append((target, link_name))
-                        except IndexError, e:
+                        except IndexError as e:
                             raise ConfigLineException(line, reason="syntax")
 
                     ## Links
@@ -442,7 +442,7 @@ def read_config(options, user):
                             target = apply_subst(target, user)
                             link_name = apply_subst(link_name, user)
                             conf["su_links"].append((target, link_name))
-                        except IndexError, e:
+                        except IndexError as e:
                             raise ConfigLineException(line, reason="syntax")
 
                     ## dconf file
@@ -450,7 +450,7 @@ def read_config(options, user):
                         try:
                             dconf_file = re.findall(r'"(.+)"', line)[0]
                             dconf_file = apply_subst(dconf_file, user)
-                        except IndexError, e:
+                        except IndexError as e:
                             raise ConfigLineException(line, reason="syntax")
 
                     ## dconf entry
@@ -460,12 +460,12 @@ def read_config(options, user):
                         try:
                             dconf_entry = re.findall(r'"(.+)"', line)[0]
                             conf["dconf"].setdefault(dconf_file, []).append(dconf_entry)
-                        except IndexError, e:
+                        except IndexError as e:
                             raise ConfigLineException(line, reason="syntax")
                     else:
                         raise ConfigLineException(line, reason="syntax")
 
-                except ConfigLineException, e:
+                except ConfigLineException as e:
                     IO.write("Error: ", eol = "")
                     if e.reason == "syntax":
                         IO.write("Unrecognized line :\n%s" % e.line)
@@ -481,8 +481,8 @@ def read_config(options, user):
     # Clean DConf (remove englobing elements)
     for dconf_file in conf["dconf"]:
         indexes_to_drop = set()
-        for i in xrange(len(conf["dconf"][dconf_file])):
-            for j in xrange(len(conf["dconf"][dconf_file])):
+        for i in range(len(conf["dconf"][dconf_file])):
+            for j in range(len(conf["dconf"][dconf_file])):
                 if i == j:
                     continue
                 if conf["dconf"][dconf_file][i].startswith(conf["dconf"][dconf_file][j]):
@@ -517,7 +517,7 @@ def count_sessions(user, increment=0, clear_count=False):
     try:
         with open(SESSIONS_COUNT_FILE, "wb") as f:
             pickle.dump(user_sessions, f)
-    except Exception, e:
+    except Exception as e:
         IO.write("Error : %s" % e)
         raise
     return old_count, new_count
@@ -530,7 +530,7 @@ def get_mount_point(mount_instruction):
     line = re.sub(r'-o \S+\s*', '', line)
     line = re.sub(r'-t \S+\s*', '', line)
     line = re.sub(r'-[fnrsvw]\s*', '', line)
-    m = re.search ('(\S+)\s*$', line)
+    m = re.search (r'(\S+)\s*$', line)
     if m:
         return m.group(1)
     else:
@@ -552,7 +552,7 @@ def dconf_dump(config, user, test=False):
         return
     IO.write("dconf_dump")
 
-    for dconf_file, keys_to_save in config["dconf"].items():
+    for dconf_file, keys_to_save in list(config["dconf"].items()):
         dconf_file = os.path.join(user.home_dir, dconf_file)
         IO.write("DConf to %s" % dconf_file)
         dir_save_to = os.path.dirname(dconf_file)
@@ -579,7 +579,7 @@ def dconf_dump(config, user, test=False):
                             dump_dconf += "[%s]\n" % k[1:-1]
                         else:
                             dump_dconf += "[%s]\n" % os.path.join(k[1:-1], fold)
-                    except IndexError, e:
+                    except IndexError as e:
                         dump_dconf += line + "\n"
             else:
                 if test:
@@ -654,11 +654,11 @@ def filers_umount(config, user):
     """
     IO.write("Proceeding umount!")
     success = True
-    for mount_point in config["mounts"].keys() + [os.path.join(user.home_dir, ".gvfs"), os.path.join(user.home_dir, "freerds_client"),]:
+    for mount_point in list(config["mounts"].keys()) + [os.path.join(user.home_dir, ".gvfs"), os.path.join(user.home_dir, "freerds_client"),]:
         if not ismount(mount_point):
             IO.write("%s not mounted. Skip." % mount_point)
             continue
-        for i in xrange(UMOUNT_MAX_ATTEMPT):
+        for i in range(UMOUNT_MAX_ATTEMPT):
             if run_cmd(
                 cmd=["umount", "-fl", mount_point],
             ):
@@ -799,7 +799,7 @@ def proceed_roaming_close(options, config, user):
         return
 
     # RM
-    for i in xrange(RM_MAX_ATTEMPT):
+    for i in range(RM_MAX_ATTEMPT):
         success = run_cmd(
             cmd=["rm", "-rf", "--one-file-system", user.home_dir]
         )
@@ -823,11 +823,11 @@ def list_current_user_sessions(display=False):
         user_sessions = {}
     if display:
         if len(user_sessions) == 0:
-            print "Currently, no user has an open session."
+            print("Currently, no user has an open session.")
         else:
-            print "Currently, these users have an open session :"
+            print("Currently, these users have an open session :")
             for username in user_sessions:
-                print "%s: %i" % (username, user_sessions[username])
+                print("%s: %i" % (username, user_sessions[username]))
     return user_sessions
 
 def proceed_on_halt(options):
@@ -846,7 +846,7 @@ def proceed_on_halt(options):
                         else:
                             config = read_config(options, user)
                             proceed_roaming_close(options, config, user)
-        except Exception, e:
+        except Exception as e:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             IO.write("\n".join(traceback.format_exception(exc_type, exc_value, exc_traceback)))
         IO.write("done.")
@@ -931,6 +931,6 @@ if __name__ == '__main__':
 
             IO.write("Everything complete.")
             sys.exit(0)
-        except Exception, e:
+        except Exception as e:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             IO.write("\n".join(traceback.format_exception(exc_type, exc_value, exc_traceback)))

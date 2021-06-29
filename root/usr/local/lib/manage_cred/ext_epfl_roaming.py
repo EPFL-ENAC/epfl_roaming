@@ -31,7 +31,7 @@ def run(username, password):
         options.context = "pam"
         user = read_user(options, username)
         config = read_config(options, user)
-        for mount_point, mount_instruction in config["mounts"].items():
+        for mount_point, mount_instruction in list(config["mounts"].items()):
             if not os.path.exists(mount_point):
                 user = NameSpace()
                 user.username = username
@@ -52,5 +52,5 @@ def run(username, password):
         IO.write("Done running epfl_roaming extension from manage_cred for user %s." % username)
 
 if __name__ == "__main__":
-    print >> sys.stderr, "This is not to be run this way!"
+    print("This is not to be run this way!", file=sys.stderr)
     sys.exit(1)

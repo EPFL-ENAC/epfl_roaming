@@ -46,18 +46,18 @@ def fork_and_wait():
         for ext in extensions:
             if os.path.exists(extensions[ext].FLAG_FILE):
                 an_ext_was_run = True
-                print "Running extension %s." % ext
+                print("Running extension %s." % ext)
                 extensions[ext].run(USERNAME, PASSWORD)
                 try:
                     os.unlink(extensions[ext].FLAG_FILE)
                 except:
                     pass
-                print "done."
+                print("done.")
         if not an_ext_was_run:
-            print "got USR2 signal, but no extension were run."
+            print("got USR2 signal, but no extension were run.")
 
     def signal_KILL_handler(signum, frame):
-        print "got TERM signal, gonna exit."
+        print("got TERM signal, gonna exit.")
         sys.exit(0)
 
     if os.fork() != 0:
@@ -75,7 +75,7 @@ def fork_and_wait():
         if (ext_folder_stat.st_uid != 0 or
             ext_folder_stat.st_gid != 0 or
             ext_folder_stat.st_mode & (stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO) != stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR):
-            print "Error, extensions folder %s doesn't have correct rights : root:root 0x700.\nAborting." % EXT_FOLDER
+            print("Error, extensions folder %s doesn't have correct rights : root:root 0x700.\nAborting." % EXT_FOLDER)
             sys.exit(1)
 
         sys.path.insert(0, EXT_FOLDER)
@@ -89,7 +89,7 @@ def fork_and_wait():
             if (ext_stat.st_uid != 0 or
                 ext_stat.st_gid != 0 or
                 ext_stat.st_mode & (stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO) != stat.S_IRUSR | stat.S_IWUSR):
-                print "Error, extensions %s doesn't have correct rights : root:root 0x600.\nSkipping." % ext_path
+                print("Error, extensions %s doesn't have correct rights : root:root 0x600.\nSkipping." % ext_path)
                 continue
 
             try:
@@ -99,15 +99,15 @@ def fork_and_wait():
                     type(mod.FLAG_FILE) == str and callable(mod.run)):
                     extensions[ext_name] = mod
                 else:
-                    print "Error, %s doesn't implement required variables and functions; Skipping." % ext_name
-            except Exception, e:
-                print "Error, could not import %s; Skipping." % ext_name
-                print e
+                    print("Error, %s doesn't implement required variables and functions; Skipping." % ext_name)
+            except Exception as e:
+                print("Error, could not import %s; Skipping." % ext_name)
+                print(e)
 
 
         for i in range(MANAGE_CRED_TIMEOUT):
             time.sleep(1)
-        print "Finished to wait for %i seconds; exiting." % MANAGE_CRED_TIMEOUT
+        print("Finished to wait for %i seconds; exiting." % MANAGE_CRED_TIMEOUT)
 
 
 if __name__ == "__main__":
@@ -116,9 +116,9 @@ if __name__ == "__main__":
     SERVICE = os.environ["PAM_SERVICE"]
     TYPE = os.environ["PAM_TYPE"]
 
-    print "USERNAME %s" % USERNAME
-    print "SERVICE %s" % SERVICE
-    print "TYPE %s" % TYPE
+    print("USERNAME %s" % USERNAME)
+    print("SERVICE %s" % SERVICE)
+    print("TYPE %s" % TYPE)
 
     if TYPE != "auth":
         sys.exit(0)
