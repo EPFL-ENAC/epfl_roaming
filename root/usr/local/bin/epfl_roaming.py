@@ -201,7 +201,7 @@ def run_cmd(cmd, s_cmd=None, env=None, stdin=None, stdout=subprocess.PIPE,
             IO.write("-> (%s) %s" % (p.pid, cmd))
         else:
             IO.write("-> (%s) %s" % (p.pid, " ".join(cmd)))
-    output = p.communicate(s_input)[0]
+    output = p.communicate(s_input)[0].decode()
     if output != "":
         IO.write("|  (%s) " % p.pid + re.sub(r"\n", "\n|  (%s) " % p.pid, output))
 
@@ -306,7 +306,7 @@ def read_user(options, on_halt_username=None):
             l_filter="uid=%s" % user.username,
             l_attrs=["uniqueIdentifier"]
         )
-        unique_identifier = ldap_res[0][1]["uniqueIdentifier"][0]
+        unique_identifier = ldap_res[0][1]["uniqueIdentifier"][0].decode()
     except (KeyError, IndexError): # no pw_uid or not in ldap!
         return user
 
@@ -323,7 +323,7 @@ def read_user(options, on_halt_username=None):
     )
     for entry in ldap_res:
         if entry[1].get("automountInformation") != None:
-            automount_informations = entry[1]["automountInformation"][0]
+            automount_informations = entry[1]["automountInformation"][0].decode()
             automount_informations = re.findall(r'-fstype=(\w+),(.+) ([\w\.]+):(.+)$', automount_informations)[0]
 
     gr = grp.getgrgid(pw.pw_gid)

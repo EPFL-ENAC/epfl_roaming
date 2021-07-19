@@ -1,1 +1,4 @@
 *.pyc
+.vscode/
+Pipfile
+Pipfile.lock
