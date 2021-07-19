@@ -381,6 +381,7 @@ def apply_subst(name, user):
     name = re.sub(r'_SCIPER_DIGIT_', user.sciper_digit, name)
     name = re.sub(r'_SCIPER_', user.sciper, name)
     name = re.sub(r'_USERNAME_', user.username, name)
+    name = re.sub(r'_HOME_DIR_', user.home_dir, name)
     name = re.sub(r'_GROUPNAME_', user.groupname, name)
     name = re.sub(r'_DOMAIN_', user.domain, name)
     name = re.sub(r'_UID_', user.uid, name)
