@@ -33,7 +33,10 @@ The files related to epfl_roaming :
 + `/usr/local/bin/epfl_roaming.py`
     Main script
 + `/usr/local/etc/epfl_roaming.conf`
-    Configuration
+    Configuration.
+    This File has to be customized to :
+    + replace the path `ChangeMeToResponsibleTeam/pool` to the expected one
+    + choose what app's prefs have to be roaming
 + `/usr/local/lib/manage_cred/ext_epfl_roaming.py`
     manage_cred's extension for epfl_roaming
 
