@@ -378,9 +378,13 @@ def check_options(options, user):
             sys.exit(0)
 
 def apply_subst(name, user):
+    """
+      user.username forced in lowercase (VMware Horizon)
+    """
+
     name = re.sub(r'_SCIPER_DIGIT_', user.sciper_digit, name)
     name = re.sub(r'_SCIPER_', user.sciper, name)
-    name = re.sub(r'_USERNAME_', user.username, name)
+    name = re.sub(r'_USERNAME_', user.username.lower(), name)
     name = re.sub(r'_HOME_DIR_', user.home_dir, name)
     name = re.sub(r'_GROUPNAME_', user.groupname, name)
     name = re.sub(r'_DOMAIN_', user.domain, name)
@@ -402,9 +406,13 @@ def read_config(options, user):
             self.line = line
             self.reason = reason
 
-    conf = {"mounts" : {}, "links" : [], "su_links" : [], "dconf" : {},}
+    conf = {"mounts" : {}, "programmer" : [], "posixfs" : [], "posixmnt" : [], "links" : [], "su_links" : [], "dconf" : {},}
 
     dconf_file = ""
+
+    # Au cas où programmer, posixfs (posixmnt) n'existent pas dans epfl_roaming.conf
+    user.programmer = False
+    user.posixfs = False
 
     try:
         with open(CONFIG_FILE, "r") as f:
@@ -425,7 +433,58 @@ def read_config(options, user):
                         line = apply_subst(line, user)
                         mount_point = get_mount_point(line)
                         conf["mounts"][mount_point] = line
-
+                    ## Programmer
+                    elif subject == "programmer":
+                        try:
+                            target, link_name = re.findall(r'"([^"]+)"', line)[0:2]
+                            target = apply_subst(target, user)
+                            link_name = apply_subst(link_name, user)
+                            conf["programmer"].append((target, link_name))
+                            # target = 1st parameter i.e. Desktop/myfiles/Programmation
+                            # link_name = 2nd paramater i.e. YES or NO
+                            if link_name.upper() == 'YES':
+                              user.programmer = True
+                              user.programmer_dir = target
+                            else:
+                              user.programmer = False
+                            IO.write("Debug: programmer target " + target)
+                            IO.write("Debug: programmer link_name " + link_name)
+                        except IndexError, e:
+                            raise ConfigLineException(line, reason="syntax")
+                    ## posixfs
+                    elif subject == "posixfs":
+                        try:
+                            target, link_name = re.findall(r'"([^"]+)"', line)[0:2]
+                            target = apply_subst(target, user)
+                            link_name = apply_subst(link_name, user)
+                            conf["posixfs"].append((target, link_name))
+                            # target = 1st parameter i.e. Desktop/myfiles/fs/posix-1G-disk.fs
+                            # link_name = 2nd paramater i.e. 1024M or 1G
+                            user.posixfs_size = link_name.upper()
+                            user.posixfs_path = target
+                            IO.write("Debug: posixfs size " + user.posixfs_size)
+                            IO.write("Debug: posixfs path " + user.posixfs_path)
+                        except IndexError, e:
+                            raise ConfigLineException(line, reason="syntax")
+                    ## posixmnt
+                    elif subject == "posixmnt":
+                        try:
+                            target, link_name = re.findall(r'"([^"]+)"', line)[0:2]
+                            target = apply_subst(target, user)
+                            link_name = apply_subst(link_name, user)
+                            conf["posixmnt"].append((target, link_name))
+                            # target = 1st parameter i.e. Desktop/posixfs
+                            # link_name = 2nd paramater i.e. YES or NO
+                            if link_name.upper() == 'YES':
+                              user.posixfs = True
+                              user.posixmnt_path = target
+                              IO.write("Debug: posixfs is set " + str(user.posixfs))
+                              IO.write("Debug: posixmnt  path " + user.posixmnt_path)
+                            else:
+                              user.posixfs = False
+                              IO.write("Debug: posixfs is set " + str(user.posixfs))
+                        except IndexError, e:
+                            raise ConfigLineException(line, reason="syntax")
                     ## Links
                     elif subject == "link":
                         try:
@@ -647,6 +706,12 @@ def filers_mount(config, user):
     if MANAGE_CRED_TERM:
         os.kill(manage_cred_pid, signal.SIGTERM)
 
+def umount_posixfs(user):
+    success = True
+    IO.write("Proceeding POSIX Filesystem umount!")
+    run_cmd(cmd=['/bin/fusermount', '-u', os.path.join(user.home_dir, user.posixmnt_path)])
+    return success
+
 def filers_umount(config, user):
     """
         Performs all umount
@@ -680,6 +745,64 @@ def make_homedir(user):
         )
     else:
         IO.write("homedir already exists.")
+
+def make_progdir(user):
+    progdir = user.home_dir + "/" + user.programmer_dir
+    if not os.path.exists(progdir):
+        IO.write("Make progdir to " + progdir)
+        with UserIdentity(user):
+            run_cmd(
+                cmd=["mkdir", "-p", progdir]
+            )
+    else:
+        IO.write("progdir already exists.")
+    # ACLs appliqués à chaque fois !
+    prog = str(progdir.split("/")[-1])
+    with UserIdentity(user):
+        run_cmd(
+            cmd=["smbcacls", "//" + user.automount_host.split('.')[0] + ".intranet.epfl.ch/data", user.username + "/" + prog, "-k", "--add", "ACL:INTRANET\\" + user.username + ":ALLOWED/OI|CI/FULL"]
+            # smbcacls //files9.intranet.epfl.ch/data fabbri/Programmation -k --add "ACL:INTRANET\\$USER:ALLOWED/OI|CI/FULL"
+        )
+    IO.write("ACLs to progdir applied.")
+
+def make_posixfs(user):
+    user.posixfs_path = os.path.join(user.home_dir, user.posixfs_path)
+    user.posixmnt_path = os.path.join(user.home_dir, user.posixmnt_path)
+
+    with UserIdentity(user):
+        if not os.path.exists(os.path.dirname(user.posixfs_path)):
+            run_cmd(
+                cmd=["mkdir", "-p", os.path.dirname(user.posixfs_path)]
+            )
+            IO.write("Create posix folder: " + os.path.dirname(user.posixfs_path))
+
+        if not os.path.exists(user.posixfs_path):
+            run_cmd(
+                cmd = ['truncate', '--size=' + user.posixfs_size, user.posixfs_path]
+            )
+            IO.write("Create posix file: " + user.posixfs_path)
+            run_cmd(
+                cmd = ['/sbin/mkfs.ext2', user.posixfs_path]
+            )
+            IO.write("Create posix fs: " + user.posixfs_path)
+
+        run_cmd(
+            cmd = ['/sbin/fsck.ext2', '-fy', user.posixfs_path]
+        )
+        IO.write("Check posix fs: " + user.posixfs_path)
+
+        run_cmd(
+            cmd=["mkdir", "-p", user.posixmnt_path]
+        )
+        IO.write("Create posix mnt: " + user.posixmnt_path)
+
+        run_cmd(
+            cmd = ['/usr/local/bin/fuse-ext2', '-o', 'rw+,allow_other,uid=' + str(user.uid) + ',gid=' + str(user.gid), user.posixfs_path, user.posixmnt_path]
+        )
+    # end of serIdentity
+
+    IO.write("Mount posix fs: " + user.posixfs_path + " to " + user.posixmnt_path)
+    IO.write("POSIX Filesystem to posixfs applied.")
 
 def proceed_roaming_open(config, user):
     IO.write("Proceeding roaming 'open'!")
@@ -753,6 +876,16 @@ def proceed_roaming_open(config, user):
     ## Mounts (sudo)
     filers_mount(config, user)
 
+    ## Make progdir 2nd
+    if user.programmer:
+      make_progdir(user)
+      IO.write("Debug: computer programmer.")
+
+    ## Virtual File System in Userspace (POSIX compliant)
+    if user.posixfs:
+      make_posixfs(user)
+      IO.write("Debug: POSIX Filesystem.")
+
     with UserIdentity(user):
         ## Links
         for target, link_name in config["links"] + config["su_links"]:
@@ -793,6 +926,11 @@ def proceed_roaming_close(options, config, user):
                             cmd=["cp", link_name, target],
                         )
         dconf_dump(config, user)
+
+    # Unmount POSIX Filesystem
+    if not umount_posixfs(user):
+        IO.write("Some trouble in unmonting POSIX Filesystem.")
+        return
 
     # Umounts (sudo)
     if not filers_umount(config, user):
