@@ -449,7 +449,7 @@ def read_config(options, user):
                               user.programmer = False
                             IO.write("Debug: programmer target " + target)
                             IO.write("Debug: programmer link_name " + link_name)
-                        except IndexError, e:
+                        except IndexError as e:
                             raise ConfigLineException(line, reason="syntax")
                     ## posixfs
                     elif subject == "posixfs":
@@ -464,7 +464,7 @@ def read_config(options, user):
                             user.posixfs_path = target
                             IO.write("Debug: posixfs size " + user.posixfs_size)
                             IO.write("Debug: posixfs path " + user.posixfs_path)
-                        except IndexError, e:
+                        except IndexError as e:
                             raise ConfigLineException(line, reason="syntax")
                     ## posixmnt
                     elif subject == "posixmnt":
@@ -483,7 +483,7 @@ def read_config(options, user):
                             else:
                               user.posixfs = False
                               IO.write("Debug: posixfs is set " + str(user.posixfs))
-                        except IndexError, e:
+                        except IndexError as e:
                             raise ConfigLineException(line, reason="syntax")
                     ## Links
                     elif subject == "link":
@@ -603,7 +603,7 @@ def ismount(path):
         Replaces os.path.ismount which doesn't work for nfsv4 run from root
     """
     p = subprocess.Popen(["mount"], stdout=subprocess.PIPE)
-    output = p.communicate()[0]
+    output = p.communicate()[0].decode()
     return path in re.findall(r' on (\S+)\s+', output)
 
 def dconf_dump(config, user, test=False):
