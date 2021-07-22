@@ -345,7 +345,7 @@ def check_options(options, user):
     """
         Performs all required checks
     """
-    if options.context == "pam" and user.conn_service not in ("lightdm", "sshd", "login", "common-session", "gdm-password"):
+    if options.context == "pam" and user.conn_service not in ("lightdm", "sshd", "login", "common-session", "gdm-password", "gdm-vmwcred"):
         IO.write("Not doing anything for PAM_SERVICE '%s'" % user.conn_service)
         sys.exit(0)
     if options.context in ("pam", "on_halt") and os.geteuid() != 0:
