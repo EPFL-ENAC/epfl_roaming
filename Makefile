@@ -9,7 +9,7 @@ install:
 	test -d /usr/local/lib/manage_cred || mkdir -m 700 /usr/local/lib/manage_cred
 	test -d /etc/skel/.config/autostart || mkdir -p /etc/skel/.config/autostart
 	test -d /etc/systemd/system || mkdir -p /etc/systemd/system
-	apt-get -y install python-ldap python-lockfile cifs-utils
+	apt-get -y install python3-ldap python3-lockfile cifs-utils
 	grep -v 'manage_cred.py' /etc/pam.d/common-auth > $(tmpfile)
 	cat $(tmpfile) root/etc/pam.d/common-auth > /etc/pam.d/common-auth
 	grep -v 'epfl_roaming.py' /etc/pam.d/common-session > $(tmpfile)
