@@ -44,6 +44,7 @@ import datetime
 import signal
 import time
 import traceback
+import collections
 
 ### CONSTANTS
 LOG_PAM = "/var/log/epfl_roaming.log"
@@ -413,6 +414,7 @@ def read_config(options, user):
     # Au cas où programmer, posixfs (posixmnt) n'existent pas dans epfl_roaming.conf
     user.programmer = False
     user.posixfs = False
+    user.posixovl = None
 
     try:
         with open(CONFIG_FILE, "r") as f:
@@ -485,6 +487,17 @@ def read_config(options, user):
                               IO.write("Debug: posixfs is set " + str(user.posixfs))
                         except IndexError as e:
                             raise ConfigLineException(line, reason="syntax")
+                    ## posixovl
+                    elif subject == "posixovl":
+                        try:
+                            lower, mountpoint = re.findall(r'"([^"]+)"', line)[0:2]
+                            PosixOVLSettings = collections.namedtuple('PosixOVLSettings', ['lower', 'mountpoint'])
+                            user.posixovl = PosixOVLSettings(
+                                os.path.join(user.home_dir, apply_subst(lower, user)),
+                                os.path.join(user.home_dir, apply_subst(mountpoint, user)))
+                        except IndexError as e:
+                            raise ConfigLineException(line, reason="syntax")
+
                     ## Links
                     elif subject == "link":
                         try:
@@ -766,30 +779,38 @@ def make_progdir(user):
     IO.write("ACLs to progdir applied.")
 
 def obsolescent_mount_loopback_fuse_ext2(user):
-    user.posixfs_path = os.path.join(user.home_dir, user.posixfs_path)
-    user.posixmnt_path = os.path.join(user.home_dir, user.posixmnt_path)
+    posixfs_path = os.path.join(user.home_dir, user.posixfs_path)
+    posixmnt_path = os.path.join(user.home_dir, user.posixmnt_path)
 
-    if not os.path.exists(user.posixfs_path):
-        IO.write("No obsolescent ext2 image found at " + user.posixfs_path + ", skipping")
-        return
+    if not os.path.exists(posixfs_path):
+        IO.write("No obsolescent ext2 image found at " + posixfs_path + ", skipping")
+        return False
 
     with UserIdentity(user):
         run_cmd(
-            cmd = ['/sbin/fsck.ext2', '-fy', user.posixfs_path]
+            cmd = ['/sbin/fsck.ext2', '-fy', posixfs_path]
         )
-        IO.write("Check posix fs: " + user.posixfs_path)
+        IO.write("Check posix fs: " + posixfs_path)
 
         run_cmd(
-            cmd=["mkdir", "-p", user.posixmnt_path]
+            cmd=["mkdir", "-p", posixmnt_path]
         )
 
-        IO.write("Now mounting: " + user.posixmnt_path)
+        IO.write("Now mounting: " + posixmnt_path)
         run_cmd(
-            cmd = ['/usr/local/bin/fuse-ext2', '-o', 'rw+,allow_other,uid=' + str(user.uid) + ',gid=' + str(user.gid), user.posixfs_path, user.posixmnt_path]
+            cmd = ['/usr/local/bin/fuse-ext2', '-o', 'rw+,allow_other,uid=' + str(user.uid) + ',gid=' + str(user.gid), posixfs_path, posixmnt_path]
         )
-    # end of serIdentity
+    # end of with UserIdentity
 
-    IO.write("Mount obsolescent loopback posix fs: " + user.posixfs_path + " to " + user.posixmnt_path)
+    IO.write("Mounted obsolescent loopback posix fs: " + posixfs_path + " to " + posixmnt_path)
+    return True
+
+def mount_posixovl(user):
+    with UserIdentity(user):
+        run_cmd(
+            cmd = ['mount.posixovl', '-S', user.posixovl.lower, user.posixovl.mountpoint]
+        )
+    IO.write("Mounted posixovl from %s to %s" % (user.posixovl.lower, user.posixovl.mountpoint))
 
 def proceed_roaming_open(config, user):
     IO.write("Proceeding roaming 'open'!")
@@ -869,9 +890,14 @@ def proceed_roaming_open(config, user):
       IO.write("Debug: computer programmer.")
 
     ## Virtual File System in Userspace (POSIX compliant)
+    has_obsolescent_posixfs = False
     if user.posixfs:
-      obsolescent_mount_loopback_fuse_ext2(user)
-      IO.write("Debug: mounted (obsolete) loopback POSIX Filesystem.")
+      if obsolescent_mount_loopback_fuse_ext2(user):
+          IO.write("Debug: mounted (obsolete) loopback POSIX Filesystem.")
+          has_obsolescent_posixfs = True
+
+    if (not has_obsolescent_posixfs) and user.posixovl:
+      mount_posixovl(user)
 
     with UserIdentity(user):
         ## Links
