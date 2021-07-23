@@ -112,7 +112,7 @@ class UserIdentity():
         os.setegid(0)
         IO.write("ID changed : %s" % (os.getresuid(), ))
 
-    def setrugid(self):
+    def drop_privs(self):
         """Set real UID and GID the same as effective UID and GID.
 
         To be used as the `preexec_fn` for `run_cmd` for commands that run durable jobs
@@ -802,7 +802,6 @@ def obsolescent_mount_loopback_fuse_ext2(user):
             IO.write("No obsolescent ext2 image found at " + posixfs_path + ", skipping")
             return False
 
-    with UserIdentity(user):
         run_cmd(
             cmd = ['/sbin/fsck.ext2', '-fy', posixfs_path]
         )
@@ -829,7 +828,7 @@ def mount_posixovl(user):
         IO.write("Now mounting %s to %s" % (user.posixovl.lower, user.posixovl.mountpoint))
         run_cmd(
             cmd = ['mount.posixovl', '-S', user.posixovl.lower, user.posixovl.mountpoint],
-            preexec_fn=u.setrugid
+            preexec_fn=u.drop_privs
         )
     IO.write("Mounted posixovl from %s to %s" % (user.posixovl.lower, user.posixovl.mountpoint))
 
