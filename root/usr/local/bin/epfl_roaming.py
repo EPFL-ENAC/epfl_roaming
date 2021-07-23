@@ -105,11 +105,24 @@ class UserIdentity():
         os.setegid(int(self.user.gid))
         os.seteuid(int(self.user.uid))
         IO.write("ID changed : %s" % (os.getresuid(), ))
+        return self
 
     def __exit__(self, typ, val, tb):
         os.seteuid(0)
         os.setegid(0)
         IO.write("ID changed : %s" % (os.getresuid(), ))
+
+    def setrugid(self):
+        """Set real UID and GID the same as effective UID and GID.
+
+        To be used as the `preexec_fn` for `run_cmd` for commands that run durable jobs
+        (not required for mkdir(1), but required for e.g. `mount.posixovl(8)`)
+        """
+        IO.write("Setting real GID to %d" % os.getegid())
+        os.setregid(os.getegid(), -1)
+        IO.write("Setting real UID to %d" % os.geteuid())
+        os.setreuid(os.geteuid(), -1)
+        IO.write("All privileges dropped")
 
 class IO(object):
     def __init__(self, filename):
@@ -187,7 +200,7 @@ class Ldap(object):
         raise e
 
 def run_cmd(cmd, s_cmd=None, env=None, stdin=None, stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT, s_input=None, shell=False):
+            stderr=subprocess.STDOUT, s_input=None, shell=False, preexec_fn=None):
     p = subprocess.Popen(
         cmd,
         env=env,
@@ -195,6 +208,7 @@ def run_cmd(cmd, s_cmd=None, env=None, stdin=None, stdout=subprocess.PIPE,
         stdout=stdout,
         stderr=stderr,
         shell=shell,
+        preexec_fn=preexec_fn
     )
     if s_cmd != None:
         IO.write("-> (%s) %s" % (p.pid, s_cmd))
@@ -807,13 +821,14 @@ def obsolescent_mount_loopback_fuse_ext2(user):
     return True
 
 def mount_posixovl(user):
-    with UserIdentity(user):
+    with UserIdentity(user) as u:
         run_cmd(
             cmd=["mkdir", "-p", user.posixovl.mountpoint]
         )
         IO.write("Now mounting %s to %s" % (user.posixovl.lower, user.posixovl.mountpoint))
         run_cmd(
-            cmd = ['mount.posixovl', '-S', user.posixovl.lower, user.posixovl.mountpoint]
+            cmd = ['mount.posixovl', '-S', user.posixovl.lower, user.posixovl.mountpoint],
+            preexec_fn=u.setrugid
         )
     IO.write("Mounted posixovl from %s to %s" % (user.posixovl.lower, user.posixovl.mountpoint))
 
