@@ -28,6 +28,7 @@ $ sudo apt install python-lockfile
 It requires to work with script manage_cred.py
 """
 
+__version__ = "0.4.0"
 
 import os
 import sys
