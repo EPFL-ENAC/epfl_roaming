@@ -797,9 +797,10 @@ def obsolescent_mount_loopback_fuse_ext2(user):
     posixfs_path = os.path.join(user.home_dir, user.posixfs_path)
     posixmnt_path = os.path.join(user.home_dir, user.posixmnt_path)
 
-    if not os.path.exists(posixfs_path):
-        IO.write("No obsolescent ext2 image found at " + posixfs_path + ", skipping")
-        return False
+    with UserIdentity(user):
+        if not os.path.exists(posixfs_path):
+            IO.write("No obsolescent ext2 image found at " + posixfs_path + ", skipping")
+            return False
 
     with UserIdentity(user):
         run_cmd(
