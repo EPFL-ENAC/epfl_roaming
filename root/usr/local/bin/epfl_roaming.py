@@ -765,27 +765,15 @@ def make_progdir(user):
         )
     IO.write("ACLs to progdir applied.")
 
-def make_posixfs(user):
+def obsolescent_mount_loopback_fuse_ext2(user):
     user.posixfs_path = os.path.join(user.home_dir, user.posixfs_path)
     user.posixmnt_path = os.path.join(user.home_dir, user.posixmnt_path)
 
+    if not os.path.exists(user.posixfs_path):
+        IO.write("No obsolescent ext2 image found at " + user.posixfs_path + ", skipping")
+        return
+
     with UserIdentity(user):
-        if not os.path.exists(os.path.dirname(user.posixfs_path)):
-            run_cmd(
-                cmd=["mkdir", "-p", os.path.dirname(user.posixfs_path)]
-            )
-            IO.write("Create posix folder: " + os.path.dirname(user.posixfs_path))
-
-        if not os.path.exists(user.posixfs_path):
-            run_cmd(
-                cmd = ['truncate', '--size=' + user.posixfs_size, user.posixfs_path]
-            )
-            IO.write("Create posix file: " + user.posixfs_path)
-            run_cmd(
-                cmd = ['/sbin/mkfs.ext2', user.posixfs_path]
-            )
-            IO.write("Create posix fs: " + user.posixfs_path)
-
         run_cmd(
             cmd = ['/sbin/fsck.ext2', '-fy', user.posixfs_path]
         )
@@ -794,15 +782,14 @@ def make_posixfs(user):
         run_cmd(
             cmd=["mkdir", "-p", user.posixmnt_path]
         )
-        IO.write("Create posix mnt: " + user.posixmnt_path)
 
+        IO.write("Now mounting: " + user.posixmnt_path)
         run_cmd(
             cmd = ['/usr/local/bin/fuse-ext2', '-o', 'rw+,allow_other,uid=' + str(user.uid) + ',gid=' + str(user.gid), user.posixfs_path, user.posixmnt_path]
         )
     # end of serIdentity
 
-    IO.write("Mount posix fs: " + user.posixfs_path + " to " + user.posixmnt_path)
-    IO.write("POSIX Filesystem to posixfs applied.")
+    IO.write("Mount obsolescent loopback posix fs: " + user.posixfs_path + " to " + user.posixmnt_path)
 
 def proceed_roaming_open(config, user):
     IO.write("Proceeding roaming 'open'!")
@@ -883,8 +870,8 @@ def proceed_roaming_open(config, user):
 
     ## Virtual File System in Userspace (POSIX compliant)
     if user.posixfs:
-      make_posixfs(user)
-      IO.write("Debug: POSIX Filesystem.")
+      obsolescent_mount_loopback_fuse_ext2(user)
+      IO.write("Debug: mounted (obsolete) loopback POSIX Filesystem.")
 
     with UserIdentity(user):
         ## Links
