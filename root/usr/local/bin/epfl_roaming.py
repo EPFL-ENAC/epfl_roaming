@@ -809,6 +809,10 @@ def obsolescent_mount_loopback_fuse_ext2(user):
 def mount_posixovl(user):
     with UserIdentity(user):
         run_cmd(
+            cmd=["mkdir", "-p", user.posixovl.mountpoint]
+        )
+        IO.write("Now mounting %s to %s" % (user.posixovl.lower, user.posixovl.mountpoint))
+        run_cmd(
             cmd = ['mount.posixovl', '-S', user.posixovl.lower, user.posixovl.mountpoint]
         )
     IO.write("Mounted posixovl from %s to %s" % (user.posixovl.lower, user.posixovl.mountpoint))
