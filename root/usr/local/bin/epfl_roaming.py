@@ -658,7 +658,7 @@ def dconf_dump(config, user, test=False):
                 else:
                     cmd = ["sudo", "-u", user.username, "dconf", "dump", k]
                 p = subprocess.Popen(cmd, stdout=subprocess.PIPE, env={})
-                k_dumped = p.communicate()[0]
+                k_dumped = p.communicate()[0].decode()
 
                 for line in k_dumped.split("\n"):
                     try:
@@ -675,7 +675,7 @@ def dconf_dump(config, user, test=False):
                 else:
                     cmd = ["sudo", "-u", user.username, "dconf", "read", k]
                 p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-                k_dumped = p.communicate()[0]
+                k_dumped = p.communicate()[0].decode()
                 if k_dumped != "":
                     dump_dconf += """
 [%s]
