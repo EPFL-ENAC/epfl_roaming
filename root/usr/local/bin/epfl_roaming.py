@@ -736,8 +736,12 @@ def filers_mount(config, user):
 
 def umount_posixfs(user):
     success = True
-    IO.write("Proceeding POSIX Filesystem umount!")
-    run_cmd(cmd=['/bin/fusermount', '-u', os.path.join(user.home_dir, user.posixmnt_path)])
+    try:
+        IO.write("Proceeding POSIX Filesystem umount!")
+        run_cmd(cmd=['/bin/fusermount', '-u', os.path.join(user.home_dir, user.posixmnt_path)])
+    except AttributeError:
+        # user.posixmnt_path is not defined -> not applicable
+        pass
     return success
 
 def filers_umount(config, user):
