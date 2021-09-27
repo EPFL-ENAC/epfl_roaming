@@ -737,11 +737,19 @@ def filers_mount(config, user):
 def umount_posixfs(user):
     success = True
     try:
-        IO.write("Proceeding POSIX Filesystem umount!")
-        run_cmd(cmd=['/bin/fusermount', '-u', os.path.join(user.home_dir, user.posixmnt_path)])
+        run_cmd(cmd=['/usr/bin/fusermount', '-u', os.path.join(user.home_dir, user.posixmnt_path)])
+        IO.write("Umounted POSIX filesystem")
     except AttributeError:
         # user.posixmnt_path is not defined -> not applicable
         pass
+
+    try:
+        run_cmd(cmd=['/usr/bin/fusermount', '-u', user.posixovl.mountpoint])
+        IO.write("Umounted POSIX ovl filesystem")
+    except AttributeError:
+        # user.posixovl.mountpoint is not defined -> not applicable
+        pass
+
     return success
 
 def filers_umount(config, user):
@@ -827,11 +835,14 @@ def obsolescent_mount_loopback_fuse_ext2(user):
 def mount_posixovl(user):
     with UserIdentity(user) as u:
         run_cmd(
+            cmd=["mkdir", "-p", user.posixovl.lower]
+        )
+        run_cmd(
             cmd=["mkdir", "-p", user.posixovl.mountpoint]
         )
         IO.write("Now mounting %s to %s" % (user.posixovl.lower, user.posixovl.mountpoint))
         run_cmd(
-            cmd = ['mount.posixovl', '-S', user.posixovl.lower, user.posixovl.mountpoint],
+            cmd = ['/usr/sbin/mount.posixovl', '-S', user.posixovl.lower, user.posixovl.mountpoint],
             preexec_fn=u.drop_privs
         )
     IO.write("Mounted posixovl from %s to %s" % (user.posixovl.lower, user.posixovl.mountpoint))
